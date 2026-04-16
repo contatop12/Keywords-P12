@@ -1,0 +1,13 @@
+.env
+credentials.json
+token.json
+client_secret.json
+.tmp/*
+!.tmp/.gitkeep
+__pycache__/
+*.pyc
+node_modules/
+.next/
+dist/
+.venv/
+venv/

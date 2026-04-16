@@ -1,0 +1,20 @@
+{
+  "name": "keywords-p12",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "predev": "kill-port 3000 3001 8000 8011 || echo portas ja livres",
+    "dev": "concurrently -k -n backend,frontend \"npm run backend:dev\" \"npm run frontend:dev\"",
+    "build": "npm run frontend:build",
+    "start": "npm run frontend:start",
+    "backend:dev": ".\\.venv\\Scripts\\python -m uvicorn backend.main:app --reload --port 8011",
+    "frontend:install": "npm --prefix frontend install",
+    "frontend:dev": "npm --prefix frontend run dev -- --port 3000",
+    "frontend:build": "npm --prefix frontend run build",
+    "frontend:start": "npm --prefix frontend run start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "kill-port": "^2.0.1"
+  }
+}
