@@ -1,0 +1,9 @@
+node_modules/
+.next/
+dist/
+
+# OpenNext / Cloudflare Workers
+.open-next/
+.wrangler/
+.dev.vars
+cloudflare-env.d.ts

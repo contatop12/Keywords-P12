@@ -11,3 +11,12 @@ node_modules/
 dist/
 .venv/
 venv/
+
+# OpenNext / Cloudflare Workers
+frontend/.open-next/
+frontend/.wrangler/
+frontend/.dev.vars
+frontend/cloudflare-env.d.ts
+
+# Local tooling
+.claude/
