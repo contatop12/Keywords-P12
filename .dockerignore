@@ -15,3 +15,4 @@ frontend/.open-next
 .env.*
 !.env.example
 .cursor
+.env.example
