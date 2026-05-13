@@ -12,6 +12,7 @@ dist/
 .venv/
 venv/
 .env.example
+sync-secrets.ps1
 
 # OpenNext / Cloudflare Workers
 frontend/.open-next/
