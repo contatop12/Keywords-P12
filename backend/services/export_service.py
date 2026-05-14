@@ -1,122 +1,295 @@
 import io
+import re
+from datetime import datetime
+
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-_HEADER_BG = "1C1917"
-_HEADER_FONT = "FAFAF9"
-_ROW_ALT_BG = "FDF8F0"
-_ACCENT = "D97706"
+_HEADER_BG = "FF000000"
+_HEADER_FONT = "FFFFFFFF"
 
-_TAB_COLORS = [
-    "D97706", "B45309", "92400E", "78350F",
-    "A16207", "854D0E", "713F12", "451A03",
-    "CA8A04", "EAB308", "F59E0B", "FBBF24",
+_FONT_NAME = "Calibri"
+
+_COL_WIDTHS = [50.88, 15.0, 14.38, 22.25, 13.75, 13.25, 15.5, 15.0]
+_MONTH_COL_WIDTH = 13.13
+
+_PT_MONTHS = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ]
 
-from backend.services.google_metrics import GOOGLE_MONTH_COLUMNS, GOOGLE_STATIC_HEADERS
+_FIXED_NEGATIVAS = [
+    ("GERAL", None, True),
+    (
+        "Convênios",
+        (
+            "amil, bradesco saude, unimed, sulamerica, porto seguro, cassi, geap, "
+            "plano de saude, convenio, aceita convenio, reembolso (se não trabalhar com reembolso)."
+        ),
+        False,
+    ),
+    (
+        "Geral/Financeiro",
+        (
+            "[gratis], [gratuito], [online], [cotação], [preço], [quanto custa] "
+            "(se não quiser atrair diretamente por preço), [barato], [desconto] "
+            "(à exceção dos convênios), [promocao], [convênio] [publico] [SUS]"
+        ),
+        False,
+    ),
+    ("Tipo de Serviço (médico não odontológico)", None, True),
+    (
+        "Aparelhos/Venda/Conserto",
+        "[aparelhos], [maquinas], [equipamentos], [comprar], [venda], [alugar], [conserto], [manutencao], [pecas]",
+        False,
+    ),
+    (
+        "Cursos/Profissional",
+        "[curso], [faculdade], [graduação], [pos], [especialização], [profissionais], [aprender], [livro], [vaga], [emprego], [carreira], [salario]",
+        False,
+    ),
+    (
+        "Geral irrelevante",
+        "[fotos], [imagens], [wiki], [youtube], [filme], [serie], [download], [pdf], [videos], [blog], [forum], [artigo], [noticias]",
+        False,
+    ),
+]
 
-_COL_WIDTHS = [40, 20, 22, 46, 14, 22, 42, 42]
 
-_THIN = Side(style="thin", color="E5E5E5")
-_BORDER = Border(bottom=_THIN)
+def _study_month_year(study: dict) -> tuple[str, int]:
+    raw = study.get("created_at")
+    dt: datetime | None = None
+    if isinstance(raw, str):
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            dt = None
+    if dt is None:
+        dt = datetime.utcnow()
+    return _PT_MONTHS[dt.month - 1], dt.year
 
 
-def _header_fill() -> PatternFill:
-    return PatternFill("solid", fgColor=_HEADER_BG)
+def _format_location(study: dict) -> str:
+    locations = study.get("locations") or []
+    if locations:
+        first = str(locations[0]).strip()
+        cleaned = re.sub(r"^(city|state|country):", "", first, flags=re.IGNORECASE)
+        cleaned = cleaned.split("#")[0].strip()
+        if cleaned:
+            return f"Local: {cleaned.title()}"
+    country = study.get("country") or ""
+    return f"Local: {country.upper()}" if country else "Local: -"
 
 
-def _alt_fill() -> PatternFill:
-    return PatternFill("solid", fgColor=_ROW_ALT_BG)
+def _seeds_label(seeds: list[str]) -> str:
+    joined = "; ".join(seed.strip() for seed in seeds if seed and seed.strip())
+    return f"Palavras-chaves usadas (limite 10):  {joined}"
 
 
-def _write_sheet(ws, items: list[dict], tab_color: str = _ACCENT) -> None:
-    ws.sheet_properties.tabColor = tab_color
+def _month_columns(reference_month: str, reference_year: int) -> list[str]:
+    idx = _PT_MONTHS.index(reference_month)
+    cols: list[str] = []
+    year = reference_year
+    month_idx = idx
+    sequence: list[tuple[str, int]] = []
+    for _ in range(12):
+        sequence.append((_PT_MONTHS[month_idx], year))
+        month_idx -= 1
+        if month_idx < 0:
+            month_idx = 11
+            year -= 1
+    for name, yr in reversed(sequence):
+        cols.append(f"Searches: \n{name} {yr}")
+    return cols
 
-    all_months = list(GOOGLE_MONTH_COLUMNS)
-    headers = list(GOOGLE_STATIC_HEADERS) + all_months
-    col_widths = _COL_WIDTHS + [18] * len(all_months)
 
-    header_font = Font(name="Calibri", bold=True, color=_HEADER_FONT, size=10)
+def _to_int_or_none(value):
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        cleaned = value.strip().replace(",", "").replace(".", "")
+        return int(cleaned) if cleaned.isdigit() else None
+    return None
+
+
+def _yoy_header_label(month_name: str, year: int) -> str:
+    short_curr = f"{month_name[:5].lower()}/{str(year)[-2:]}"
+    short_prev = f"{month_name[:5].lower()}/{str(year - 1)[-2:]}"
+    return (
+        "Mudança em relação ao mesmo mês do ano anterior \n"
+        f"({short_prev} e {short_curr})"
+    )
+
+
+def _write_meta_and_headers(
+    ws,
+    seeds: list[str],
+    location_label: str,
+    month_name: str,
+    year: int,
+    month_columns: list[str],
+) -> None:
+    meta_font = Font(name=_FONT_NAME, size=10)
+    ws.cell(row=1, column=1, value=f"{month_name} de {year}").font = meta_font
+    ws.cell(row=1, column=2, value=location_label).font = meta_font
+    ws.cell(row=1, column=4, value=_seeds_label(seeds)).font = meta_font
+    ws.row_dimensions[1].height = 18
+
+    headers = [
+        "Palavra-Chave",
+        "Média de Pesquisas",
+        "Mudança em três meses",
+        _yoy_header_label(month_name, year),
+        "Concorrência",
+        "Grau de concorrência",
+        "Menores valores para aparecer no topo da pesquisa",
+        "Maiores valores para aparecer no topo da pesquisa",
+    ] + month_columns
+
+    header_fill = PatternFill("solid", fgColor=_HEADER_BG)
+    header_font = Font(name=_FONT_NAME, bold=True, color=_HEADER_FONT, size=10)
     for col_idx, header in enumerate(headers, start=1):
-        cell = ws.cell(row=1, column=col_idx, value=header)
+        cell = ws.cell(row=2, column=col_idx, value=header)
         cell.font = header_font
-        cell.fill = _header_fill()
+        cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        ws.row_dimensions[1].height = 32
+    ws.row_dimensions[2].height = 46
 
-    ws.freeze_panes = "A2"
+    for col_idx in range(1, len(_COL_WIDTHS) + 1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = _COL_WIDTHS[col_idx - 1]
+    for col_idx in range(len(_COL_WIDTHS) + 1, len(_COL_WIDTHS) + 1 + len(month_columns)):
+        ws.column_dimensions[get_column_letter(col_idx)].width = _MONTH_COL_WIDTH
 
-    for row_idx, item in enumerate(items, start=2):
-        is_alt = row_idx % 2 == 0
-        alt = _alt_fill() if is_alt else None
+    ws.freeze_panes = "B3"
 
+
+def _write_data_rows(ws, items: list[dict], month_columns: list[str]) -> None:
+    body_font = Font(name=_FONT_NAME, size=10)
+    right = Alignment(horizontal="right")
+    left = Alignment(horizontal="left")
+
+    monthly_keys = [col.replace("Searches: \n", "Searches: ") for col in month_columns]
+
+    for row_offset, item in enumerate(items, start=3):
         monthly = item.get("searches_mensais") or {}
+        media = item.get("media_pesquisas")
+        media_int = _to_int_or_none(media)
+        change_3m = item.get("mudanca_tres_meses") or "--"
+        change_yoy = item.get("mudanca_ano_anterior") or "--"
+        competition = item.get("concorrencia") or "Desconhecido"
+        comp_index = item.get("grau_concorrencia")
+        low_bid = item.get("menor_lance_topo")
+        high_bid = item.get("maior_lance_topo")
+
         row_data = [
             item.get("name", ""),
-            item.get("media_pesquisas"),
-            item.get("mudanca_tres_meses"),
-            item.get("mudanca_ano_anterior"),
-            item.get("concorrencia"),
-            item.get("grau_concorrencia"),
-            item.get("menor_lance_topo"),
-            item.get("maior_lance_topo"),
-        ] + [monthly.get(m) for m in all_months]
+            media_int,
+            change_3m,
+            change_yoy,
+            competition,
+            comp_index,
+            low_bid,
+            high_bid,
+        ]
+        for key in monthly_keys:
+            row_data.append(_to_int_or_none(monthly.get(key)))
 
         for col_idx, value in enumerate(row_data, start=1):
-            cell = ws.cell(row=row_idx, column=col_idx, value=value)
-            cell.font = Font(name="Calibri", size=10)
-            cell.border = _BORDER
-            if alt:
-                cell.fill = alt
-            if col_idx in (2, 6):
-                cell.alignment = Alignment(horizontal="right")
-                cell.number_format = "#,##0"
+            cell = ws.cell(row=row_offset, column=col_idx, value=value)
+            cell.font = body_font
+            if col_idx == 1:
+                cell.alignment = left
+            else:
+                cell.alignment = right
+            if col_idx == 2:
+                cell.number_format = "#,##0;-#,##0;"
+            elif col_idx == 6:
+                cell.number_format = "0;-0;"
             elif col_idx in (7, 8):
-                cell.alignment = Alignment(horizontal="right")
-                cell.number_format = 'R$ #,##0.00'
+                cell.number_format = "#,##0.00;-#,##0.00;"
             elif col_idx >= 9:
-                cell.alignment = Alignment(horizontal="right")
-                cell.number_format = "#,##0"
+                cell.number_format = "#,##0;-#,##0;"
 
-    for col_idx, width in enumerate(col_widths, start=1):
-        ws.column_dimensions[get_column_letter(col_idx)].width = width
+
+def _write_sheet(
+    ws,
+    items: list[dict],
+    seeds: list[str],
+    location_label: str,
+    month_name: str,
+    year: int,
+) -> None:
+    month_columns = _month_columns(month_name, year)
+    _write_meta_and_headers(ws, seeds, location_label, month_name, year, month_columns)
+    _write_data_rows(ws, items, month_columns)
+
+
+def _write_negativas(ws) -> None:
+    body_font = Font(name=_FONT_NAME, size=10)
+    bold_font = Font(name=_FONT_NAME, size=10, bold=True)
+    header_fill = PatternFill("solid", fgColor=_HEADER_BG)
+    header_font = Font(name=_FONT_NAME, size=10, bold=True, color=_HEADER_FONT)
+
+    for col_idx, header in enumerate(["Categoria", "Palavras Negativas"], start=1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 24
+    ws.column_dimensions["A"].width = 42
+    ws.column_dimensions["B"].width = 110
+    ws.freeze_panes = "A2"
+
+    row = 2
+    for label, value, is_section in _FIXED_NEGATIVAS:
+        cat_cell = ws.cell(row=row, column=1, value=label)
+        cat_cell.font = bold_font if is_section else body_font
+        cat_cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+        if value is not None:
+            val_cell = ws.cell(row=row, column=2, value=value)
+            val_cell.font = body_font
+            val_cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+        row += 1
+
+
+_INVALID_SHEET_CHARS = re.compile(r"[\\/*?:\[\]]")
+
+
+def _safe_sheet_title(name: str, used: set[str]) -> str:
+    cleaned = _INVALID_SHEET_CHARS.sub(" ", name).strip() or "Aba"
+    base = cleaned[:31]
+    candidate = base
+    counter = 2
+    while candidate in used:
+        suffix = f" ({counter})"
+        candidate = (base[: 31 - len(suffix)] + suffix)
+        counter += 1
+    used.add(candidate)
+    return candidate
 
 
 def generate_xlsx(study: dict) -> bytes:
     wb = Workbook()
+    used_titles: set[str] = set()
+
+    seeds = list(study.get("seed_keywords") or [])
+    location_label = _format_location(study)
+    month_name, year = _study_month_year(study)
 
     ws_general = wb.active
-    ws_general.title = "Geral"
-    _write_sheet(ws_general, study.get("general", []), tab_color=_ACCENT)
+    ws_general.title = _safe_sheet_title("Geral", used_titles)
+    _write_sheet(ws_general, study.get("general", []), seeds, location_label, month_name, year)
 
-    categories: dict[str, list[dict]] = study.get("categories", {})
-    for idx, (cat_name, items) in enumerate(categories.items()):
-        safe_name = cat_name[:31]
-        ws = wb.create_sheet(title=safe_name)
-        color = _TAB_COLORS[idx % len(_TAB_COLORS)]
-        _write_sheet(ws, items, tab_color=color)
+    categories: dict[str, list[dict]] = study.get("categories", {}) or {}
+    for cat_name, items in categories.items():
+        ws = wb.create_sheet(title=_safe_sheet_title(cat_name, used_titles))
+        _write_sheet(ws, items, seeds, location_label, month_name, year)
 
-    ws_neg = wb.create_sheet(title="Palavras Negativas")
-    ws_neg.sheet_properties.tabColor = "78350F"
-    neg_header_font = Font(name="Calibri", bold=True, color=_HEADER_FONT, size=10)
-    for h, header in enumerate(["Categoria", "Palavras Negativas"], start=1):
-        cell = ws_neg.cell(row=1, column=h, value=header)
-        cell.font = neg_header_font
-        cell.fill = _header_fill()
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-    ws_neg.row_dimensions[1].height = 28
-    ws_neg.column_dimensions["A"].width = 30
-    ws_neg.column_dimensions["B"].width = 80
-
-    row = 2
-    ad_groups: dict[str, dict] = study.get("ad_groups", {})
-    for cat, ag in ad_groups.items():
-        negativas = ag.get("palavras_negativas", [])
-        if negativas:
-            ws_neg.cell(row=row, column=1, value=cat).font = Font(name="Calibri", size=10, bold=True)
-            ws_neg.cell(row=row, column=2, value=", ".join(negativas)).font = Font(name="Calibri", size=10)
-            row += 1
+    ws_neg = wb.create_sheet(title=_safe_sheet_title("Palavras Negativas", used_titles))
+    _write_negativas(ws_neg)
 
     buf = io.BytesIO()
     wb.save(buf)
