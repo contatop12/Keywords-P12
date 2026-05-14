@@ -1,3 +1,5 @@
+import { normalizeMonthlySearches } from "../googleColumns";
+
 type GeoSuggestion = {
   id: string;
   name: string;
@@ -284,13 +286,13 @@ export async function googleGeoSuggestions(params: {
   );
 }
 
-export async function googleKeywordSearch(params: {
+export async function googleKeywordSearchWithVariants(params: {
   readEnv: (key: string) => string | undefined;
   keywords: string[];
   country: string;
   limit: number;
   locations: string[];
-}): Promise<SearchResultItem[]> {
+}): Promise<{ items: SearchResultItem[]; closeVariants: string[] }> {
   const config = readAdsConfig(params.readEnv);
   ensureConfig(config);
   const token = await getAccessToken(config);
@@ -339,11 +341,16 @@ export async function googleKeywordSearch(params: {
   };
 
   const output: SearchResultItem[] = [];
+  const closeVariants: string[] = [];
   let i = 0;
   for (const item of data.results ?? []) {
     i += 1;
     const text = String(item.text ?? "").trim();
     if (!text) continue;
+    for (const variant of item.closeVariants ?? []) {
+      const cleaned = String(variant).trim();
+      if (cleaned) closeVariants.push(cleaned);
+    }
     const metrics = item.keywordIdeaMetrics ?? {};
     const monthlyRaw = metrics.monthlySearchVolumes ?? [];
     const monthlyParsed = monthlyRaw
@@ -364,8 +371,9 @@ export async function googleKeywordSearch(params: {
       .sort((a, b) => a.key - b.key)
       .slice(-12);
 
-    const monthly: Record<string, number> = {};
-    for (const row of monthlyParsed) monthly[row.label] = row.value;
+    const monthly = normalizeMonthlySearches(
+      Object.fromEntries(monthlyParsed.map((row) => [row.label, row.value]))
+    );
     const values = Object.values(monthly);
     const current = values.at(-1) ?? null;
     const before3 = values.length >= 4 ? values.at(-4) ?? null : null;
@@ -392,5 +400,16 @@ export async function googleKeywordSearch(params: {
     });
   }
 
-  return output;
+  return { items: output, closeVariants };
+}
+
+export async function googleKeywordSearch(params: {
+  readEnv: (key: string) => string | undefined;
+  keywords: string[];
+  country: string;
+  limit: number;
+  locations: string[];
+}): Promise<SearchResultItem[]> {
+  const { items } = await googleKeywordSearchWithVariants(params);
+  return items;
 }

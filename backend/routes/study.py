@@ -43,8 +43,7 @@ def generate_study(payload: StudyRequest) -> dict:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@router.post("/study/export")
-def export_study(study: dict) -> Response:
+def _export_xlsx(study: dict) -> Response:
     try:
         xlsx_bytes = export_service.generate_xlsx(study)
     except Exception as exc:
@@ -56,3 +55,13 @@ def export_study(study: dict) -> Response:
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": 'attachment; filename="estudo-keywords.xlsx"'},
     )
+
+
+@router.post("/study/export")
+def export_study(study: dict) -> Response:
+    return _export_xlsx(study)
+
+
+@router.post("/discovery/export")
+def export_discovery(study: dict) -> Response:
+    return _export_xlsx(study)

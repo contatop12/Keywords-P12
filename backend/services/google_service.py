@@ -8,6 +8,7 @@ from fastapi import HTTPException
 
 from backend.core.config import settings
 from backend.schemas.meta import InterestItem
+from backend.services.google_metrics import normalize_monthly_searches
 from backend.services.relevance_agent import KeywordRelevanceAgent
 
 logger = logging.getLogger(__name__)
@@ -370,7 +371,7 @@ class GoogleKeywordService:
         parsed.sort(key=lambda item: item[0])
         if len(parsed) > 12:
             parsed = parsed[-12:]
-        return {label: value for _, label, value in parsed}
+        return normalize_monthly_searches({label: value for _, label, value in parsed})
 
     def _calc_changes(self, monthly: dict[str, int]) -> tuple[str | None, str | None]:
         values = list(monthly.values())
@@ -426,7 +427,7 @@ class GoogleKeywordService:
         location_ids: list[str],
         limit: int,
         index_offset: int = 0,
-    ) -> list[InterestItem]:
+    ) -> tuple[list[InterestItem], list[str]]:
         body = {
             "language": f"languageConstants/{settings.google_ads_default_language_id}",
             "geoTargetConstants": [f"geoTargetConstants/{loc_id}" for loc_id in location_ids],
@@ -448,31 +449,47 @@ class GoogleKeywordService:
                 detail="Google Ads retornou erro ao buscar keywords. Verifique customer/login/developer token.",
             )
         raw_items = response.json().get("results", [])
-        return [self._google_item_to_interest(item, index_offset + idx) for idx, item in enumerate(raw_items)]
+        items: list[InterestItem] = []
+        close_variants: list[str] = []
+        for idx, item in enumerate(raw_items):
+            for variant in item.get("closeVariants", []) or []:
+                if isinstance(variant, str) and variant.strip():
+                    close_variants.append(variant.strip())
+            items.append(self._google_item_to_interest(item, index_offset + idx))
+        return items, close_variants
 
-    def search_keywords(
+    def search_keywords_with_variants(
         self,
         keywords: list[str],
         country: str,
         limit: int,
         locations: list[str] | None = None,
-    ) -> list[InterestItem]:
+    ) -> tuple[list[InterestItem], list[str]]:
         self._ensure_configured()
         if not self.keyword_ideas_url:
             raise HTTPException(status_code=500, detail="GOOGLE_ADS_CUSTOMER_ID invalido.")
 
         seed_keywords = [kw.strip() for kw in keywords if kw and kw.strip()]
         if not seed_keywords:
-            return []
+            return [], []
 
         access_token = self._get_access_token()
         location_ids = self._location_ids_for_locations(locations or [], country, access_token=access_token)
 
-        BATCH_SIZE = 10
+        batch_size = 10
         all_items: list[InterestItem] = []
-        for i in range(0, len(seed_keywords), BATCH_SIZE):
-            batch = seed_keywords[i : i + BATCH_SIZE]
-            all_items.extend(self._call_batch(batch, access_token, location_ids, limit, index_offset=i))
+        all_variants: list[str] = []
+        for i in range(0, len(seed_keywords), batch_size):
+            batch = seed_keywords[i : i + batch_size]
+            batch_items, batch_variants = self._call_batch(
+                batch,
+                access_token,
+                location_ids,
+                limit,
+                index_offset=i,
+            )
+            all_items.extend(batch_items)
+            all_variants.extend(batch_variants)
 
         seen_names: set[str] = set()
         deduplicated: list[InterestItem] = []
@@ -496,4 +513,19 @@ class GoogleKeywordService:
                 settings.relevance_threshold,
             )
 
-        return deduplicated
+        return deduplicated, all_variants
+
+    def search_keywords(
+        self,
+        keywords: list[str],
+        country: str,
+        limit: int,
+        locations: list[str] | None = None,
+    ) -> list[InterestItem]:
+        items, _ = self.search_keywords_with_variants(
+            keywords=keywords,
+            country=country,
+            limit=limit,
+            locations=locations,
+        )
+        return items

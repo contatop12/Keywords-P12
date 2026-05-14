@@ -1,30 +1,38 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from backend.schemas.meta import (
+    GoogleDiscoveryResponse,
     GoogleGeoSuggestionRequest,
     GoogleGeoSuggestionResponse,
     GoogleSearchRequest,
-    SearchResponse,
 )
+from backend.services.discovery_service import run_discovery
 from backend.services.google_service import GoogleKeywordService
 
 router = APIRouter(prefix="/api/google", tags=["google"])
 service = GoogleKeywordService()
 
 
-@router.post("/search", response_model=SearchResponse)
-def search_google_keywords(payload: GoogleSearchRequest) -> SearchResponse:
+@router.post("/search", response_model=GoogleDiscoveryResponse)
+def search_google_keywords(payload: GoogleSearchRequest) -> GoogleDiscoveryResponse:
     keywords = payload.effective_keywords
     if not keywords:
-        return SearchResponse(results=[])
+        return GoogleDiscoveryResponse(
+            id="",
+            created_at="",
+            country=payload.country,
+            results=[],
+        )
+    if not payload.locations:
+        raise HTTPException(status_code=422, detail="Selecione ao menos uma localizacao.")
 
-    results = service.search_keywords(
+    payload_data = run_discovery(
         keywords=keywords,
+        locations=payload.locations,
         country=payload.country,
         limit=payload.limit,
-        locations=payload.locations,
     )
-    return SearchResponse(results=results)
+    return GoogleDiscoveryResponse(**payload_data)
 
 
 @router.post("/geo/suggest", response_model=GoogleGeoSuggestionResponse)

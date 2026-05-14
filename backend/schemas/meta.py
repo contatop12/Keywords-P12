@@ -40,6 +40,18 @@ class SearchResponse(BaseModel):
     results: list[InterestItem] = Field(default_factory=list)
 
 
+class GoogleDiscoveryResponse(BaseModel):
+    id: str
+    created_at: str
+    seed_keywords: list[str] = Field(default_factory=list)
+    locations: list[str] = Field(default_factory=list)
+    country: str
+    general: list[InterestItem] = Field(default_factory=list)
+    categories: dict[str, list[InterestItem]] = Field(default_factory=dict)
+    broaden_suggestions: list[str] = Field(default_factory=list)
+    results: list[InterestItem] = Field(default_factory=list)
+
+
 class GoogleSearchRequest(BaseModel):
     keyword: str = Field(default="", max_length=200)
     keywords: list[str] = Field(default_factory=list)

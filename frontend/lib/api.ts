@@ -1,4 +1,4 @@
-import { GeoSuggestionItem, SearchPayload, SearchResponse, StudyMeta, StudyResult } from "./types";
+import { DiscoveryResult, GeoSuggestionItem, SearchPayload, SearchResponse } from "./types";
 
 const DEFAULT_API_BASE_URL = process.env.NODE_ENV === "production" ? "" : "http://localhost:8011";
 
@@ -39,8 +39,27 @@ export async function searchMetaInterests(payload: SearchPayload): Promise<Searc
   return executeSearch("/api/meta/search", payload, "Meta");
 }
 
-export async function searchGoogleKeywords(payload: SearchPayload): Promise<SearchResponse> {
-  return executeSearch("/api/google/search", payload, "Google Ads");
+export async function searchGoogleDiscovery(payload: SearchPayload): Promise<DiscoveryResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/google/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error(`Nao foi possivel conectar ao backend em ${API_BASE_URL || "mesma origem"}.`);
+  }
+
+  if (!response.ok) {
+    const maybeJson = await response
+      .json()
+      .catch(() => ({ detail: "Falha inesperada na busca Google Ads." }));
+    const detail = maybeJson?.detail ?? "Falha inesperada na busca Google Ads.";
+    throw new Error(detail);
+  }
+
+  return (await response.json()) as DiscoveryResult;
 }
 
 export async function suggestGoogleLocations(payload: {
@@ -67,59 +86,12 @@ export async function suggestGoogleLocations(payload: {
   return data.results ?? [];
 }
 
-export async function generateStudy(payload: {
-  keywords: string[];
-  locations: string[];
-  country: string;
-  limit: number;
-}): Promise<StudyResult> {
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE_URL}/api/google/study`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    throw new Error(`Nao foi possivel conectar ao backend em ${API_BASE_URL || "mesma origem"}.`);
-  }
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({ detail: "Erro ao gerar estudo." }));
-    throw new Error(err?.detail ?? "Erro ao gerar estudo.");
-  }
-  return response.json() as Promise<StudyResult>;
-}
-
-export async function downloadStudyXlsx(study: StudyResult): Promise<Blob> {
-  const response = await fetch(`${API_BASE_URL}/api/google/study/export`, {
+export async function downloadDiscoveryXlsx(discovery: DiscoveryResult): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}/api/google/discovery/export`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(study),
+    body: JSON.stringify(discovery),
   });
   if (!response.ok) throw new Error("Erro ao gerar XLSX.");
   return response.blob();
-}
-
-export async function listStudies(): Promise<StudyMeta[]> {
-  const res = await fetch("/api/studies");
-  if (!res.ok) return [];
-  return res.json();
-}
-
-export async function saveStudy(study: StudyResult, name?: string): Promise<void> {
-  await fetch("/api/studies", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...study, name: name ?? null }),
-  });
-}
-
-export async function loadStudy(id: string): Promise<StudyResult> {
-  const res = await fetch(`/api/studies/${id}`);
-  if (!res.ok) throw new Error("Estudo nao encontrado.");
-  return res.json();
-}
-
-export async function deleteStudy(id: string): Promise<void> {
-  await fetch(`/api/studies/${id}`, { method: "DELETE" });
 }

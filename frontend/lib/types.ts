@@ -26,6 +26,18 @@ export type SearchResponse = {
   results: InterestItem[];
 };
 
+export type DiscoveryResult = {
+  id: string;
+  created_at: string;
+  seed_keywords: string[];
+  locations: string[];
+  country: string;
+  general: InterestItem[];
+  categories: Record<string, InterestItem[]>;
+  broaden_suggestions: string[];
+  results: InterestItem[];
+};
+
 export type GeoSuggestionItem = {
   id: string;
   name: string;
@@ -40,14 +52,7 @@ export type AdGroup = {
   extensoes: { sitelinks: string[]; callouts: string[] };
 };
 
-export type StudyResult = {
-  id: string;
-  created_at: string;
-  seed_keywords: string[];
-  locations: string[];
-  country: string;
-  general: InterestItem[];
-  categories: Record<string, InterestItem[]>;
+export type StudyResult = DiscoveryResult & {
   insights: string[];
   ad_groups: Record<string, AdGroup>;
 };

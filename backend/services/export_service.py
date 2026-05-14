@@ -14,16 +14,7 @@ _TAB_COLORS = [
     "CA8A04", "EAB308", "F59E0B", "FBBF24",
 ]
 
-_STATIC_HEADERS = [
-    "Palavra-Chave",
-    "Média de Pesquisas",
-    "Mudança em três meses",
-    "Mudança em relação ao mesmo mês do ano anterior",
-    "Concorrência",
-    "Grau de concorrência",
-    "Menores valores para aparecer no topo da pesquisa",
-    "Maiores valores para aparecer no topo da pesquisa",
-]
+from backend.services.google_metrics import GOOGLE_MONTH_COLUMNS, GOOGLE_STATIC_HEADERS
 
 _COL_WIDTHS = [40, 20, 22, 46, 14, 22, 42, 42]
 
@@ -42,15 +33,8 @@ def _alt_fill() -> PatternFill:
 def _write_sheet(ws, items: list[dict], tab_color: str = _ACCENT) -> None:
     ws.sheet_properties.tabColor = tab_color
 
-    all_months: list[str] = []
-    seen_months: set[str] = set()
-    for item in items:
-        for month_key in (item.get("searches_mensais") or {}).keys():
-            if month_key not in seen_months:
-                seen_months.add(month_key)
-                all_months.append(month_key)
-
-    headers = _STATIC_HEADERS + all_months
+    all_months = list(GOOGLE_MONTH_COLUMNS)
+    headers = list(GOOGLE_STATIC_HEADERS) + all_months
     col_widths = _COL_WIDTHS + [18] * len(all_months)
 
     header_font = Font(name="Calibri", bold=True, color=_HEADER_FONT, size=10)

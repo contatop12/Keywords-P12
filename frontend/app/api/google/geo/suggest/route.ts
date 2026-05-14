@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     }
     const country = (payload.country ?? "BR").trim().toUpperCase();
     const geoType = payload.geo_type ?? "city";
-    const limit = Math.max(1, Math.min(25, Number(payload.limit ?? 12)));
+    const limit = Math.max(1, Math.min(25, Number(payload.limit ?? 25)));
 
     const ctx = await getCloudflareContext();
     const env = ctx.env as unknown as Record<string, string | undefined>;
