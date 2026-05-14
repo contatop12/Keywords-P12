@@ -56,7 +56,7 @@ class GoogleSearchRequest(BaseModel):
     keyword: str = Field(default="", max_length=200)
     keywords: list[str] = Field(default_factory=list)
     country: str = Field(default="BR", min_length=2, max_length=2)
-    limit: int = Field(default=50, ge=1, le=100)
+    limit: int = Field(default=50, ge=1)
     locations: list[str] = Field(default_factory=list)
 
     @field_validator("keyword")

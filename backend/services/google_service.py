@@ -428,34 +428,50 @@ class GoogleKeywordService:
         limit: int,
         index_offset: int = 0,
     ) -> tuple[list[InterestItem], list[str]]:
-        body = {
-            "language": f"languageConstants/{settings.google_ads_default_language_id}",
-            "geoTargetConstants": [f"geoTargetConstants/{loc_id}" for loc_id in location_ids],
-            "keywordSeed": {"keywords": batch},
-            "includeAdultKeywords": settings.google_ads_include_adult_keywords,
-            "keywordPlanNetwork": "GOOGLE_SEARCH_AND_PARTNERS",
-            "pageSize": min(limit, 100),
-        }
-        response = requests.post(
-            self.keyword_ideas_url,
-            headers=self._make_headers(access_token),
-            json=body,
-            timeout=settings.request_timeout_seconds,
-        )
-        if response.status_code >= 400:
-            logger.error("Google Ads batch erro: status=%s body=%s", response.status_code, response.text)
-            raise HTTPException(
-                status_code=502,
-                detail="Google Ads retornou erro ao buscar keywords. Verifique customer/login/developer token.",
-            )
-        raw_items = response.json().get("results", [])
         items: list[InterestItem] = []
         close_variants: list[str] = []
-        for idx, item in enumerate(raw_items):
-            for variant in item.get("closeVariants", []) or []:
-                if isinstance(variant, str) and variant.strip():
-                    close_variants.append(variant.strip())
-            items.append(self._google_item_to_interest(item, index_offset + idx))
+        page_token: str | None = None
+        remaining = max(limit, 1)
+
+        while remaining > 0:
+            page_size = min(remaining, 10_000)
+            body: dict[str, object] = {
+                "language": f"languageConstants/{settings.google_ads_default_language_id}",
+                "geoTargetConstants": [f"geoTargetConstants/{loc_id}" for loc_id in location_ids],
+                "keywordSeed": {"keywords": batch},
+                "includeAdultKeywords": settings.google_ads_include_adult_keywords,
+                "keywordPlanNetwork": "GOOGLE_SEARCH_AND_PARTNERS",
+                "pageSize": page_size,
+            }
+            if page_token:
+                body["pageToken"] = page_token
+
+            response = requests.post(
+                self.keyword_ideas_url,
+                headers=self._make_headers(access_token),
+                json=body,
+                timeout=settings.request_timeout_seconds,
+            )
+            if response.status_code >= 400:
+                logger.error("Google Ads batch erro: status=%s body=%s", response.status_code, response.text)
+                raise HTTPException(
+                    status_code=502,
+                    detail="Google Ads retornou erro ao buscar keywords. Verifique customer/login/developer token.",
+                )
+
+            payload = response.json()
+            raw_items = payload.get("results", []) or []
+            for item in raw_items:
+                for variant in item.get("closeVariants", []) or []:
+                    if isinstance(variant, str) and variant.strip():
+                        close_variants.append(variant.strip())
+                items.append(self._google_item_to_interest(item, index_offset + len(items)))
+
+            remaining -= len(raw_items)
+            page_token = payload.get("nextPageToken")
+            if not page_token or not raw_items:
+                break
+
         return items, close_variants
 
     def search_keywords_with_variants(
@@ -513,7 +529,7 @@ class GoogleKeywordService:
                 settings.relevance_threshold,
             )
 
-        return deduplicated, all_variants
+        return deduplicated[:limit], all_variants
 
     def search_keywords(
         self,

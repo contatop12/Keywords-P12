@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     }
 
     const country = (payload.country ?? "BR").trim().toUpperCase();
-    const limit = Math.max(1, Math.min(100, Number(payload.limit ?? 50)));
+    const limit = Math.max(1, Number(payload.limit ?? 50));
 
     const ctx = await getCloudflareContext();
     const env = ctx.env as unknown as Record<string, string | undefined>;

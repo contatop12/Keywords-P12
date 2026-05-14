@@ -289,6 +289,10 @@ export default function HomePage() {
         setErrorMessage("Informe uma keyword.");
         return;
       }
+      if (limit > 100) {
+        setErrorMessage("Limite Meta: máximo 100.");
+        return;
+      }
       setLoading(true);
       setMetaResults([]);
       try {
@@ -614,7 +618,7 @@ export default function HomePage() {
           <label htmlFor="limit">
             <span className="idx">{provider === "meta" ? "03" : "02"}</span> Limite
           </label>
-          <input id="limit" type="number" min={1} max={100} value={limit} onChange={(event) => setLimit(Number(event.target.value))} />
+          <input id="limit" type="number" min={1} value={limit} onChange={(event) => setLimit(Number(event.target.value))} />
         </div>
 
         <div className="submit-wrap">
