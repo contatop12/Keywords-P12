@@ -63,6 +63,74 @@ class GoogleKeywordService:
             raise HTTPException(status_code=502, detail="Google OAuth retornou resposta sem access_token.")
         return token
 
+    GEO_LOOKUP: dict[str, str] = {
+        "city:são paulo": "1031714",
+        "city:sao paulo": "1031714",
+        "city:rio de janeiro": "1031745",
+        "city:curitiba": "1031713",
+        "city:belo horizonte": "1031710",
+        "city:porto alegre": "1031748",
+        "city:fortaleza": "1031723",
+        "city:salvador": "1031755",
+        "city:recife": "1031750",
+        "city:manaus": "1031731",
+        "city:brasilia": "1031711",
+        "city:brasília": "1031711",
+        "city:goiania": "1031724",
+        "city:goiânia": "1031724",
+        "city:belem": "1031709",
+        "city:belém": "1031709",
+        "city:campinas": "1031712",
+        "city:são luis": "1031757",
+        "city:sao luis": "1031757",
+        "city:maceio": "1031729",
+        "city:maceió": "1031729",
+        "city:natal": "1031739",
+        "city:teresina": "1031762",
+        "city:campo grande": "1031715",
+        "city:joao pessoa": "1031727",
+        "city:joão pessoa": "1031727",
+        "city:aracaju": "1031708",
+        "city:florianopolis": "1031722",
+        "city:florianópolis": "1031722",
+        "city:vitoria": "1031764",
+        "city:vitória": "1031764",
+        "state:sp": "21171",
+        "state:rj": "21175",
+        "state:mg": "21174",
+        "state:rs": "21176",
+        "state:pr": "21173",
+        "state:ba": "21159",
+        "state:ce": "21163",
+        "state:pe": "21172",
+        "state:go": "21166",
+        "state:df": "21164",
+        "state:sc": "21177",
+        "state:es": "21165",
+        "state:pa": "21170",
+        "state:ma": "21168",
+        "state:al": "21157",
+        "state:pi": "21169",
+        "state:se": "21178",
+        "state:pb": "21169",
+        "state:mt": "21167",
+        "state:ms": "21167",
+        "state:ro": "21176",
+        "state:am": "21158",
+        "state:ap": "21158",
+        "state:to": "21179",
+        "state:rr": "21176",
+        "state:ac": "21157",
+        "state:rn": "21167",
+        "country:br": "21167",
+        "country:us": "2840",
+        "country:pt": "2620",
+        "country:mx": "2484",
+        "country:ar": "2032",
+        "country:co": "2170",
+        "country:cl": "2152",
+    }
+
     def _location_ids_for_country(self, country: str) -> list[str]:
         configured = [value.strip() for value in settings.google_ads_default_location_ids.split(",") if value.strip()]
         if configured:
@@ -76,6 +144,19 @@ class GoogleKeywordService:
         }
         fallback = country_map.get(country.upper())
         return [fallback] if fallback else ["21167"]
+
+    def _location_ids_for_locations(self, locations: list[str], country: str) -> list[str]:
+        if not locations:
+            return self._location_ids_for_country(country)
+        ids: list[str] = []
+        for loc in locations:
+            key = loc.strip().lower()
+            loc_id = self.GEO_LOOKUP.get(key)
+            if loc_id:
+                ids.append(loc_id)
+            else:
+                logger.warning("Geo location nao encontrado no lookup: %s", loc)
+        return ids if ids else self._location_ids_for_country(country)
 
     def _make_headers(self, access_token: str) -> dict[str, str]:
         headers = {
@@ -220,28 +301,22 @@ class GoogleKeywordService:
             searches_mensais=monthly_searches,
         )
 
-    def search_keywords(self, keywords: list[str], country: str, limit: int) -> list[InterestItem]:
-        self._ensure_configured()
-        if not self.keyword_ideas_url:
-            raise HTTPException(status_code=500, detail="GOOGLE_ADS_CUSTOMER_ID invalido.")
-        if not keywords:
-            return []
-
-        access_token = self._get_access_token()
-        location_ids = self._location_ids_for_country(country)
-        seed_keywords = [keyword.strip() for keyword in keywords if keyword and keyword.strip()][:10]
-        if not seed_keywords:
-            return []
-
+    def _call_batch(
+        self,
+        batch: list[str],
+        access_token: str,
+        location_ids: list[str],
+        limit: int,
+        index_offset: int = 0,
+    ) -> list[InterestItem]:
         body = {
             "language": f"languageConstants/{settings.google_ads_default_language_id}",
             "geoTargetConstants": [f"geoTargetConstants/{loc_id}" for loc_id in location_ids],
-            "keywordSeed": {"keywords": seed_keywords},
+            "keywordSeed": {"keywords": batch},
             "includeAdultKeywords": settings.google_ads_include_adult_keywords,
             "keywordPlanNetwork": "GOOGLE_SEARCH_AND_PARTNERS",
             "pageSize": min(limit, 100),
         }
-
         response = requests.post(
             self.keyword_ideas_url,
             headers=self._make_headers(access_token),
@@ -249,28 +324,58 @@ class GoogleKeywordService:
             timeout=settings.request_timeout_seconds,
         )
         if response.status_code >= 400:
-            logger.error("Google Ads keyword ideas erro: status=%s body=%s", response.status_code, response.text)
+            logger.error("Google Ads batch erro: status=%s body=%s", response.status_code, response.text)
             raise HTTPException(
                 status_code=502,
                 detail="Google Ads retornou erro ao buscar keywords. Verifique customer/login/developer token.",
             )
+        raw_items = response.json().get("results", [])
+        return [self._google_item_to_interest(item, index_offset + idx) for idx, item in enumerate(raw_items)]
 
-        payload = response.json()
-        raw_items = payload.get("results", [])
-        normalized = [self._google_item_to_interest(item, idx) for idx, item in enumerate(raw_items)]
+    def search_keywords(
+        self,
+        keywords: list[str],
+        country: str,
+        limit: int,
+        locations: list[str] | None = None,
+    ) -> list[InterestItem]:
+        self._ensure_configured()
+        if not self.keyword_ideas_url:
+            raise HTTPException(status_code=500, detail="GOOGLE_ADS_CUSTOMER_ID invalido.")
+
+        seed_keywords = [kw.strip() for kw in keywords if kw and kw.strip()]
+        if not seed_keywords:
+            return []
+
+        access_token = self._get_access_token()
+        location_ids = self._location_ids_for_locations(locations or [], country)
+
+        BATCH_SIZE = 10
+        all_items: list[InterestItem] = []
+        for i in range(0, len(seed_keywords), BATCH_SIZE):
+            batch = seed_keywords[i : i + BATCH_SIZE]
+            all_items.extend(self._call_batch(batch, access_token, location_ids, limit, index_offset=i))
+
+        seen_names: set[str] = set()
+        deduplicated: list[InterestItem] = []
+        for item in all_items:
+            key = item.name.lower()
+            if key not in seen_names:
+                seen_names.add(key)
+                deduplicated.append(item)
 
         if settings.relevance_filter_enabled:
-            before_count = len(normalized)
+            before_count = len(deduplicated)
             filtered_map: dict[str, InterestItem] = {}
             for keyword in seed_keywords:
-                for item in self.relevance_agent.filter_related(keyword, normalized):
+                for item in self.relevance_agent.filter_related(keyword, deduplicated):
                     filtered_map[item.id] = item
-            normalized = list(filtered_map.values())
+            deduplicated = list(filtered_map.values())
             logger.info(
                 "Filtro de relevancia (Google) aplicado: %s -> %s resultados (threshold=%s).",
                 before_count,
-                len(normalized),
+                len(deduplicated),
                 settings.relevance_threshold,
             )
 
-        return normalized
+        return deduplicated

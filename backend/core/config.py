@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     google_ads_default_location_ids: str = "21167"
     google_ads_include_adult_keywords: bool = False
 
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_model: str = "google/gemini-flash-1.5"
+
     cors_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,"
         "http://localhost:3001,http://127.0.0.1:3001"

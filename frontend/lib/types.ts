@@ -19,8 +19,37 @@ export type SearchPayload = {
   keywords?: string[];
   country: string;
   limit: number;
+  locations?: string[];
 };
 
 export type SearchResponse = {
   results: InterestItem[];
+};
+
+export type AdGroup = {
+  nome: string;
+  palavras_positivas: string[];
+  palavras_negativas: string[];
+  extensoes: { sitelinks: string[]; callouts: string[] };
+};
+
+export type StudyResult = {
+  id: string;
+  created_at: string;
+  seed_keywords: string[];
+  locations: string[];
+  country: string;
+  general: InterestItem[];
+  categories: Record<string, InterestItem[]>;
+  insights: string[];
+  ad_groups: Record<string, AdGroup>;
+};
+
+export type StudyMeta = {
+  id: string;
+  created_at: string;
+  seed_keywords: string;
+  locations: string;
+  country: string;
+  name: string | null;
 };

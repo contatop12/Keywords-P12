@@ -5,6 +5,7 @@ from backend.core.config import settings
 from backend.core.logging_config import setup_logging
 from backend.routes.google import router as google_router
 from backend.routes.meta import router as meta_router
+from backend.routes.study import router as study_router
 
 setup_logging()
 
@@ -20,6 +21,7 @@ app.add_middleware(
 
 app.include_router(meta_router)
 app.include_router(google_router)
+app.include_router(study_router)
 
 
 @app.get("/health")

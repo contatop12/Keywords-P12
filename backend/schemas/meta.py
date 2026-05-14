@@ -45,6 +45,7 @@ class GoogleSearchRequest(BaseModel):
     keywords: list[str] = Field(default_factory=list)
     country: str = Field(default="BR", min_length=2, max_length=2)
     limit: int = Field(default=50, ge=1, le=100)
+    locations: list[str] = Field(default_factory=list)
 
     @field_validator("keyword")
     @classmethod
@@ -62,8 +63,8 @@ class GoogleSearchRequest(BaseModel):
             if lowered not in seen:
                 seen.add(lowered)
                 unique.append(item)
-        if len(unique) > 10:
-            raise ValueError("keywords permite no maximo 10 termos")
+        if len(unique) > 50:
+            raise ValueError("keywords permite no maximo 50 termos")
         return unique
 
     @field_validator("country")

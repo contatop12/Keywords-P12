@@ -16,5 +16,12 @@
       "binding": "WORKER_SELF_REFERENCE",
       "service": "keywords-p12"
     }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "keywords-p12-studies",
+      "database_id": "eca097a8-6e38-4f42-a539-80f19b71e38f"
+    }
   ]
 }

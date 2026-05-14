@@ -17,5 +17,6 @@ def search_google_keywords(payload: GoogleSearchRequest) -> SearchResponse:
         keywords=keywords,
         country=payload.country,
         limit=payload.limit,
+        locations=payload.locations,
     )
     return SearchResponse(results=results)
