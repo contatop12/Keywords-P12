@@ -26,8 +26,8 @@
 
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  --radius: 6px;
-  --radius-lg: 10px;
+  --radius: 0px;
+  --radius-lg: 0px;
 }
 
 * { box-sizing: border-box; }
@@ -96,7 +96,7 @@ body {
   border: 1.5px solid var(--accent);
   position: relative;
   display: inline-block;
-  border-radius: 3px;
+  border-radius: 0;
 }
 
 .brand-mark::after {
@@ -104,7 +104,7 @@ body {
   position: absolute;
   inset: 5px;
   background: var(--accent);
-  border-radius: 1px;
+  border-radius: 0;
 }
 
 .brand-divider { color: var(--text-faint); }
@@ -284,7 +284,7 @@ body {
   color: var(--text-muted);
   background: var(--surface);
   padding: 0 10px;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .panel-label .accent { color: var(--accent); }
@@ -296,7 +296,7 @@ body {
   background: var(--line);
   grid-template-columns: 1fr 160px 120px 190px;
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .search-google {
@@ -380,7 +380,7 @@ select option {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   border: 1px solid var(--line-strong);
-  border-radius: 20px;
+  border-radius: 0;
   color: var(--text-muted);
   transition: all 0.2s var(--ease);
 }
@@ -429,7 +429,7 @@ select option {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   border: 1px solid var(--line-strong);
-  border-radius: 16px;
+  border-radius: 0;
   color: var(--text-muted);
   transition: all 0.15s var(--ease);
 }
@@ -454,7 +454,7 @@ select option {
   padding: 4px 10px 4px 12px;
   background: var(--accent-soft);
   border: 1px solid var(--line-accent);
-  border-radius: 14px;
+  border-radius: 0;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--accent-light);
@@ -540,7 +540,7 @@ select option {
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
-  border-radius: 14px;
+  border-radius: 0;
 }
 
 .chip-kw button {
@@ -600,7 +600,7 @@ select option {
   letter-spacing: 0.16em;
   text-transform: uppercase;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   transition: background 0.2s var(--ease);
 }
 
@@ -750,7 +750,7 @@ select option {
 .table-shell {
   border: 1px solid var(--line-strong);
   background: var(--surface);
-  overflow: hidden;
+  overflow: visible;
   position: relative;
   border-radius: var(--radius-lg);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
@@ -847,7 +847,7 @@ td.name { font-weight: 500; min-width: 200px; }
   font-size: 11px;
   color: var(--text-dim);
   letter-spacing: 0.02em;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .type-pill {
@@ -860,7 +860,7 @@ td.name { font-weight: 500; min-width: 200px; }
   color: var(--accent-light);
   border: 1px solid var(--line-accent);
   background: var(--accent-soft);
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 /* ── Row actions ──────────────────────────────────────────── */
@@ -882,7 +882,7 @@ td.name { font-weight: 500; min-width: 200px; }
   background: transparent;
   transition: all 0.15s var(--ease);
   white-space: nowrap;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .btn-ghost:hover {
@@ -959,7 +959,7 @@ td.name { font-weight: 500; min-width: 200px; }
   border-radius: var(--radius-lg);
   background: var(--surface);
   margin-top: 16px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .collapse-header {
@@ -1005,7 +1005,7 @@ td.name { font-weight: 500; min-width: 200px; }
   color: var(--text-dim);
   padding: 12px 16px;
   background: var(--surface-elev);
-  border-radius: var(--radius);
+  border-radius: 0;
   border-left: 2px solid var(--accent);
 }
 
@@ -1062,7 +1062,7 @@ td.name { font-weight: 500; min-width: 200px; }
   display: inline-flex;
   padding: 3px 9px;
   font-size: 11px;
-  border-radius: 12px;
+  border-radius: 0;
   border: 1px solid var(--line-strong);
   color: var(--text-dim);
   background: var(--surface);
