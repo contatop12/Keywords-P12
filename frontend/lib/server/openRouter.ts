@@ -69,7 +69,10 @@ export async function categorizeKeywords(
         role: "system",
         content:
           "Você é especialista em Google Ads e estratégia de palavras-chave para campanhas brasileiras. " +
-          "Agrupe keywords em categorias temáticas coerentes para estruturar campanhas de anúncios. " +
+          "Agrupe apenas keywords relacionadas ao tema central das seeds. " +
+          "Não crie categorias para termos fora do nicho (ex.: velocidade de internet, jogos, " +
+          "paternidade ou outros temas sem relação direta com as seeds). " +
+          "Se uma keyword não combinar com o tema, omita-a das categorias. " +
           'Responda APENAS com JSON válido no formato: {"categorias": {"Nome da Categoria": ["keyword1", "keyword2", ...]}}. ' +
           "Use nomes de categorias em português, curtos (2-4 palavras). " +
           "Crie entre 3 e 12 categorias. Toda keyword deve aparecer em exatamente uma categoria.",

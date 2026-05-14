@@ -778,9 +778,19 @@ select option {
 }
 
 .table-scroll {
+  max-height: 1080px;
   overflow-x: auto;
+  overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--accent-dim) transparent;
+}
+
+.table-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  box-shadow: inset 0 -1px 0 var(--line-strong);
 }
 
 .table-scroll::-webkit-scrollbar { height: 8px; }

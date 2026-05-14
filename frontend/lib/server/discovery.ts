@@ -74,13 +74,51 @@ function buildBroadenSuggestions(
 
   for (const variant of closeVariants) push(variant);
   for (const seed of seedKeywords) {
-    for (const token of tokenize(seed)) push(token);
-  }
-  for (const item of items) {
-    for (const token of tokenize(item.name)) push(token);
+    push(seed);
+    for (const token of tokenize(seed)) {
+      if (token.length >= 6) push(token);
+    }
   }
 
   return ordered.slice(0, 8);
+}
+
+const RELEVANCE_THRESHOLD = 0.38;
+
+function normalizeText(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function relevanceScore(seed: string, name: string): number {
+  const keyword = normalizeText(seed);
+  const target = normalizeText(name);
+  if (!keyword || !target) return 0;
+  if (target.includes(keyword)) return 1;
+
+  const kwTokens = keyword.match(/[a-z0-9]{2,}/g) ?? [];
+  const targetTokens = new Set(target.match(/[a-z0-9]{2,}/g) ?? []);
+  if (!kwTokens.length || !targetTokens.size) return 0;
+
+  const overlap = kwTokens.filter((token) => targetTokens.has(token)).length / kwTokens.length;
+  return overlap;
+}
+
+function filterItemsToSeeds(items: SearchResultItem[], seeds: string[]): SearchResultItem[] {
+  if (!items.length || !seeds.length) return items;
+  const kept = new Map<string, SearchResultItem>();
+  for (const seed of seeds) {
+    for (const item of items) {
+      if (relevanceScore(seed, item.name) >= RELEVANCE_THRESHOLD) {
+        kept.set(item.id, item);
+      }
+    }
+  }
+  return kept.size ? Array.from(kept.values()) : items;
 }
 
 function dedupeItems(items: SearchResultItem[]): SearchResultItem[] {
@@ -103,7 +141,7 @@ export async function runGoogleDiscovery(params: {
   locations: string[];
 }) {
   const { items, closeVariants } = await googleKeywordSearchWithVariants(params);
-  const general = dedupeItems(items);
+  const general = filterItemsToSeeds(dedupeItems(items), params.keywords);
   const keywordNames = general.map((item) => item.name);
 
   let categories: Record<string, SearchResultItem[]> = {};

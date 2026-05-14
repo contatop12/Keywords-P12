@@ -5,7 +5,9 @@ from datetime import datetime
 
 from backend.schemas.meta import InterestItem
 from backend.services import ai_service
+from backend.core.config import settings
 from backend.services.google_service import GoogleKeywordService
+from backend.services.relevance_agent import KeywordRelevanceAgent
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,22 @@ def _tokenize(text: str) -> list[str]:
     return [token for token in tokens if len(token) >= 4 and token not in _STOPWORDS]
 
 
+def _filter_items_to_seeds(items: list[InterestItem], seed_keywords: list[str]) -> list[InterestItem]:
+    if not items or not seed_keywords:
+        return items
+
+    agent = KeywordRelevanceAgent(threshold=settings.relevance_threshold)
+    kept: dict[str, InterestItem] = {}
+    for seed in seed_keywords:
+        for item in agent.filter_related(seed, items):
+            kept[item.id] = item
+
+    if not kept:
+        return items
+
+    return list(kept.values())
+
+
 def build_broaden_suggestions(
     seed_keywords: list[str],
     items: list[InterestItem],
@@ -67,11 +85,10 @@ def build_broaden_suggestions(
     for variant in close_variants:
         push(variant)
     for seed in seed_keywords:
+        push(seed)
         for token in _tokenize(seed):
-            push(token)
-    for item in items:
-        for token in _tokenize(item.name):
-            push(token)
+            if len(token) >= 6:
+                push(token)
 
     return ordered[:8]
 
@@ -115,6 +132,7 @@ def run_discovery(
         limit=limit,
         locations=locations,
     )
+    items = _filter_items_to_seeds(items, keywords)
 
     categories = _categorize_items(items, keywords)
     broaden_suggestions = build_broaden_suggestions(keywords, items, close_variants)

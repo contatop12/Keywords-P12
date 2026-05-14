@@ -18,8 +18,8 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("META_AD_ACCOUNT_ID", "AD_ACCOUNT_ID", "META_ACCOUNT_ID"),
     )
     request_timeout_seconds: int = 20
-    relevance_filter_enabled: bool = False
-    relevance_threshold: float = 0.32
+    relevance_filter_enabled: bool = True
+    relevance_threshold: float = 0.38
     google_ads_client_id: str = ""
     google_ads_client_secret: str = ""
     google_ads_refresh_token: str = ""
