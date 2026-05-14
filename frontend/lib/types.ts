@@ -26,6 +26,13 @@ export type SearchResponse = {
   results: InterestItem[];
 };
 
+export type GeoSuggestionItem = {
+  id: string;
+  name: string;
+  country_code: string;
+  target_type: string;
+};
+
 export type AdGroup = {
   nome: string;
   palavras_positivas: string[];

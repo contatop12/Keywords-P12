@@ -10,10 +10,11 @@ import {
   loadStudy,
   saveStudy,
   searchGoogleKeywords,
+  suggestGoogleLocations,
   searchMetaInterests,
 } from "../lib/api";
 import { isFavorite, toggleFavorite } from "../lib/storage";
-import { AdGroup, InterestItem, StudyMeta, StudyResult } from "../lib/types";
+import { AdGroup, GeoSuggestionItem, InterestItem, StudyMeta, StudyResult } from "../lib/types";
 
 type StatusType = "info" | "error" | "warning";
 type Provider = "meta" | "google";
@@ -49,12 +50,14 @@ const GEO_OPTIONS: Record<GeoType, { label: string; values: string[] }> = {
 
 function geoLabel(geo: string): string {
   const [type, ...rest] = geo.split(":");
-  return rest.join(":");
+  const base = rest.join(":");
+  return base.includes("#") ? base.split("#")[0] : base;
 }
 
-function geoValue(type: GeoType, value: string): string {
+function geoValue(type: GeoType, value: string, id?: string): string {
   const map: Record<GeoType, string> = { country: "country", state: "state", city: "city" };
-  return `${map[type]}:${value.toLowerCase()}`;
+  const normalized = value.toLowerCase();
+  return id ? `${map[type]}:${normalized}#${id}` : `${map[type]}:${normalized}`;
 }
 
 function formatNum(value: number | null | undefined): string {
@@ -93,6 +96,8 @@ export default function HomePage() {
   const [geoChips, setGeoChips] = useState<string[]>(["country:brasil"]);
   const [geoInput, setGeoInput] = useState("");
   const [geoOpen, setGeoOpen] = useState(false);
+  const [geoSuggestionsRemote, setGeoSuggestionsRemote] = useState<GeoSuggestionItem[]>([]);
+  const [geoLoading, setGeoLoading] = useState(false);
 
   // Filters
   const [country, setCountry] = useState("BR");
@@ -128,14 +133,55 @@ export default function HomePage() {
   const tableWidth = tableWidthByProvider[provider];
 
   // ── Geo filtering ────────────────────────────────────────
-  const geoSuggestions = useMemo(() => {
+  const geoFallbackSuggestions = useMemo(() => {
     const opts = GEO_OPTIONS[geoType].values;
     if (!geoInput.trim()) return opts;
     return opts.filter((v) => v.toLowerCase().includes(geoInput.toLowerCase()));
   }, [geoType, geoInput]);
+  const geoSuggestions = useMemo<(GeoSuggestionItem | string)[]>(() => {
+    if (geoSuggestionsRemote.length > 0) return geoSuggestionsRemote;
+    return geoFallbackSuggestions;
+  }, [geoSuggestionsRemote, geoFallbackSuggestions]);
 
-  function addGeoChip(value: string) {
-    const chip = geoValue(geoType, value);
+  useEffect(() => {
+    if (provider !== "google" || !geoInput.trim()) {
+      setGeoSuggestionsRemote([]);
+      setGeoLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(async () => {
+      setGeoLoading(true);
+      try {
+        const remote = await suggestGoogleLocations({
+          query: geoInput.trim(),
+          country,
+          geo_type: geoType,
+          limit: 12,
+        });
+        if (!controller.signal.aborted) {
+          setGeoSuggestionsRemote(remote);
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          setGeoSuggestionsRemote([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setGeoLoading(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [provider, geoInput, country, geoType]);
+
+  function addGeoChip(value: string, id?: string) {
+    const chip = geoValue(geoType, value, id);
     if (!geoChips.includes(chip)) setGeoChips((prev) => [...prev, chip]);
     setGeoInput("");
     setGeoOpen(false);
@@ -521,18 +567,35 @@ export default function HomePage() {
                     placeholder={`Buscar ${GEO_OPTIONS[geoType].label.toLowerCase()}…`}
                     value={geoInput}
                     onChange={(e) => { setGeoInput(e.target.value); setGeoOpen(true); }}
+                    onKeyDown={(e) => {
+                      if ((e.key === "Enter" || e.key === ",") && geoInput.trim()) {
+                        e.preventDefault();
+                        addGeoChip(geoInput.trim());
+                      }
+                    }}
                     onFocus={() => setGeoOpen(true)}
                     onBlur={() => setTimeout(() => setGeoOpen(false), 150)}
                     autoComplete="off"
                   />
                 </div>
-                {geoOpen && geoSuggestions.length > 0 && (
+                {geoOpen && (geoSuggestions.length > 0 || geoLoading) && (
                   <div className="geo-dropdown">
-                    {geoSuggestions.map((s) => (
-                      <button key={s} type="button" className="geo-option" onMouseDown={() => addGeoChip(s)}>
-                        {s}
-                      </button>
-                    ))}
+                    {geoLoading && <div className="geo-option">Buscando localizacoes...</div>}
+                    {!geoLoading && geoSuggestions.map((s) => {
+                      if (typeof s === "string") {
+                        return (
+                          <button key={s} type="button" className="geo-option" onMouseDown={() => addGeoChip(s)}>
+                            {s}
+                          </button>
+                        );
+                      }
+                      const label = `${s.name} (${s.target_type})`;
+                      return (
+                        <button key={`${s.id}-${s.name}`} type="button" className="geo-option" onMouseDown={() => addGeoChip(s.name, s.id)}>
+                          {label}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>

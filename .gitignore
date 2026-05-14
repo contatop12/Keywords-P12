@@ -13,6 +13,7 @@ dist/
 venv/
 .env.example
 sync-secrets.ps1
+Tainã Aci - Estudo Google Ads (1).xlsx
 
 # OpenNext / Cloudflare Workers
 frontend/.open-next/

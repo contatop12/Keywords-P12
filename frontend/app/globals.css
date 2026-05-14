@@ -196,6 +196,9 @@ body {
   border-radius: var(--radius-lg);
   padding: 20px 22px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .hero-stat-label {
@@ -211,6 +214,8 @@ body {
   font-weight: 600;
   color: var(--text);
   letter-spacing: -0.01em;
+  line-height: 1.22;
+  min-height: 1.22em;
 }
 
 .hero-stat-value .accent { color: var(--accent); }
@@ -291,7 +296,7 @@ body {
   background: var(--line);
   grid-template-columns: 1fr 160px 120px 190px;
   border-radius: var(--radius-lg);
-  clip-path: inset(0 round var(--radius-lg));
+  overflow: hidden;
 }
 
 .search-google {
@@ -329,6 +334,7 @@ input, select {
   border-bottom: 1px solid var(--line-strong);
   font-family: var(--font-mono);
   font-size: 15px;
+  line-height: 1.35;
   color: var(--text);
   transition: border-color 0.2s var(--ease);
 }
@@ -370,6 +376,7 @@ select option {
   padding: 8px 18px;
   font-family: var(--font-mono);
   font-size: 11px;
+  line-height: 1.24;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   border: 1px solid var(--line-strong);
@@ -589,6 +596,7 @@ select option {
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
+  line-height: 1.22;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   position: relative;

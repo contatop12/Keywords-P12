@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import datetime
 from typing import Any
 
@@ -131,6 +132,12 @@ class GoogleKeywordService:
         "country:cl": "2152",
     }
 
+    TARGET_TYPES_BY_GEO: dict[str, set[str]] = {
+        "city": {"City", "Municipality"},
+        "state": {"State", "Province", "Region"},
+        "country": {"Country"},
+    }
+
     def _location_ids_for_country(self, country: str) -> list[str]:
         configured = [value.strip() for value in settings.google_ads_default_location_ids.split(",") if value.strip()]
         if configured:
@@ -145,18 +152,129 @@ class GoogleKeywordService:
         fallback = country_map.get(country.upper())
         return [fallback] if fallback else ["21167"]
 
-    def _location_ids_for_locations(self, locations: list[str], country: str) -> list[str]:
+    def _location_ids_for_locations(
+        self,
+        locations: list[str],
+        country: str,
+        access_token: str | None = None,
+    ) -> list[str]:
         if not locations:
             return self._location_ids_for_country(country)
+        token = access_token if access_token else self._get_access_token()
         ids: list[str] = []
         for loc in locations:
             key = loc.strip().lower()
+            suffix_match = re.search(r"#(\d+)$", key)
+            if suffix_match:
+                ids.append(suffix_match.group(1))
+                continue
+            if key.startswith("geo:"):
+                maybe_id = key.split(":", 1)[1].strip()
+                if maybe_id.isdigit():
+                    ids.append(maybe_id)
+                    continue
+            if key.isdigit():
+                ids.append(key)
+                continue
             loc_id = self.GEO_LOOKUP.get(key)
             if loc_id:
                 ids.append(loc_id)
             else:
+                geo_kind, _, raw_value = key.partition(":")
+                if not raw_value:
+                    raw_value = key
+                raw_value = raw_value.split("#")[0].strip()
+                if not raw_value:
+                    continue
+                try:
+                    dynamic = self.suggest_locations(
+                        query=raw_value,
+                        country=country,
+                        geo_type=geo_kind if geo_kind in {"city", "state", "country"} else "city",
+                        limit=1,
+                        access_token=token,
+                    )
+                    if dynamic:
+                        ids.append(dynamic[0]["id"])
+                        continue
+                except HTTPException:
+                    logger.warning("Nao foi possivel resolver geotarget dinamico para: %s", loc)
                 logger.warning("Geo location nao encontrado no lookup: %s", loc)
         return ids if ids else self._location_ids_for_country(country)
+
+    def _normalize_target_type(self, value: str) -> str:
+        lowered = value.strip().lower()
+        if lowered == "city":
+            return "city"
+        if lowered == "state":
+            return "state"
+        return "country"
+
+    def suggest_locations(
+        self,
+        query: str,
+        country: str,
+        geo_type: str,
+        limit: int = 12,
+        access_token: str | None = None,
+    ) -> list[dict[str, str]]:
+        self._ensure_configured()
+        token = access_token if access_token else self._get_access_token()
+        endpoint = f"https://googleads.googleapis.com/{settings.google_ads_api_version}/geoTargetConstants:suggest"
+        body = {
+            "locale": "pt-BR",
+            "countryCode": country.upper(),
+            "locationNames": {"names": [query]},
+        }
+        response = requests.post(
+            endpoint,
+            headers=self._make_headers(token),
+            json=body,
+            timeout=settings.request_timeout_seconds,
+        )
+        if response.status_code >= 400:
+            logger.error(
+                "Google Ads geo suggest erro: status=%s body=%s",
+                response.status_code,
+                response.text,
+            )
+            raise HTTPException(status_code=502, detail="Falha ao buscar localizacoes no Google Ads.")
+
+        data = response.json()
+        target_key = self._normalize_target_type(geo_type)
+        allowed_types = self.TARGET_TYPES_BY_GEO[target_key]
+        suggestions = data.get("geoTargetConstantSuggestions", []) or []
+        results: list[dict[str, str]] = []
+        seen: set[str] = set()
+
+        for suggestion in suggestions:
+            target = suggestion.get("geoTargetConstant", {}) or {}
+            target_id = str(target.get("id", "")).strip()
+            name = str(target.get("name", "")).strip()
+            country_code = str(target.get("countryCode", "")).strip().upper()
+            target_type = str(target.get("targetType", "")).strip()
+            status = str(target.get("status", "")).strip().upper()
+            if not target_id or not name or not target_type:
+                continue
+            if status == "REMOVAL_PLANNED":
+                continue
+            if target_type not in allowed_types:
+                continue
+            dedup_key = f"{target_id}:{name.lower()}"
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+            results.append(
+                {
+                    "id": target_id,
+                    "name": name,
+                    "country_code": country_code,
+                    "target_type": target_type,
+                }
+            )
+            if len(results) >= limit:
+                break
+        return results
 
     def _make_headers(self, access_token: str) -> dict[str, str]:
         headers = {
@@ -348,7 +466,7 @@ class GoogleKeywordService:
             return []
 
         access_token = self._get_access_token()
-        location_ids = self._location_ids_for_locations(locations or [], country)
+        location_ids = self._location_ids_for_locations(locations or [], country, access_token=access_token)
 
         BATCH_SIZE = 10
         all_items: list[InterestItem] = []

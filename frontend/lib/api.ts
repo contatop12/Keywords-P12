@@ -1,4 +1,4 @@
-import { SearchPayload, SearchResponse, StudyMeta, StudyResult } from "./types";
+import { GeoSuggestionItem, SearchPayload, SearchResponse, StudyMeta, StudyResult } from "./types";
 
 const DEFAULT_API_BASE_URL =
   process.env.NODE_ENV === "production"
@@ -44,6 +44,30 @@ export async function searchMetaInterests(payload: SearchPayload): Promise<Searc
 
 export async function searchGoogleKeywords(payload: SearchPayload): Promise<SearchResponse> {
   return executeSearch("/api/google/search", payload, "Google Ads");
+}
+
+export async function suggestGoogleLocations(payload: {
+  query: string;
+  country: string;
+  geo_type: "city" | "state" | "country";
+  limit?: number;
+}): Promise<GeoSuggestionItem[]> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/google/geo/suggest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error(`Nao foi possivel conectar ao backend em ${API_BASE_URL}.`);
+  }
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: "Erro ao buscar localizacoes." }));
+    throw new Error(err?.detail ?? "Erro ao buscar localizacoes.");
+  }
+  const data = (await response.json()) as { results: GeoSuggestionItem[] };
+  return data.results ?? [];
 }
 
 export async function generateStudy(payload: {

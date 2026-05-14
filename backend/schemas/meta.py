@@ -79,3 +79,34 @@ class GoogleSearchRequest(BaseModel):
         if self.keyword:
             return [self.keyword]
         return []
+
+
+class GoogleGeoSuggestionRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=120)
+    country: str = Field(default="BR", min_length=2, max_length=2)
+    geo_type: str = Field(default="city", pattern="^(city|state|country)$")
+    limit: int = Field(default=12, ge=1, le=25)
+
+    @field_validator("query")
+    @classmethod
+    def validate_query(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("query nao pode ser vazio")
+        return cleaned
+
+    @field_validator("country")
+    @classmethod
+    def validate_country_code(cls, value: str) -> str:
+        return value.strip().upper()
+
+
+class GoogleGeoSuggestionItem(BaseModel):
+    id: str
+    name: str
+    country_code: str
+    target_type: str
+
+
+class GoogleGeoSuggestionResponse(BaseModel):
+    results: list[GoogleGeoSuggestionItem] = Field(default_factory=list)
