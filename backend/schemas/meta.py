@@ -34,6 +34,8 @@ class InterestItem(BaseModel):
     menor_lance_topo: float | None = None
     maior_lance_topo: float | None = None
     searches_mensais: dict[str, int] = Field(default_factory=dict)
+    google_concept: str | None = None
+    google_concept_group: str | None = None
 
 
 class SearchResponse(BaseModel):

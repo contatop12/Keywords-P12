@@ -29,11 +29,11 @@ def generate_study(
     keyword_names = [item.name for item in all_items]
 
     categories_map: dict[str, list[str]] = {}
-    if keyword_names:
+    if all_items:
         try:
-            categories_map = ai_service.categorize_keywords(keyword_names, seed_keywords=keywords)
+            categories_map = ai_service.categorize_items(all_items, seed_keywords=keywords)
         except Exception:
-            logger.exception("Falha na categorizacao IA — usando categoria unica")
+            logger.exception("Falha na categorizacao — usando categoria unica")
             categories_map = {"Geral": keyword_names}
 
     name_to_item: dict[str, InterestItem] = {item.name.lower(): item for item in all_items}

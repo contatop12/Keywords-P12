@@ -384,6 +384,19 @@ class GoogleKeywordService:
 
         return self._pct_text(current, three_months_before), self._pct_text(current, yoy)
 
+    def _extract_concept(self, item: dict[str, Any]) -> tuple[str | None, str | None]:
+        annotations = item.get("keywordAnnotations", {}) or {}
+        concepts = annotations.get("concepts", []) or []
+        if not concepts:
+            return None, None
+        first = concepts[0] or {}
+        concept_name = first.get("name")
+        group = first.get("conceptGroup", {}) or {}
+        group_name = group.get("name")
+        concept_clean = concept_name.strip() if isinstance(concept_name, str) and concept_name.strip() else None
+        group_clean = group_name.strip() if isinstance(group_name, str) and group_name.strip() else None
+        return concept_clean, group_clean
+
     def _google_item_to_interest(self, item: dict[str, Any], index: int) -> InterestItem:
         text = item.get("text", "")
         metrics = item.get("keywordIdeaMetrics", {}) or {}
@@ -395,8 +408,13 @@ class GoogleKeywordService:
         close_variants = item.get("closeVariants", []) or []
         monthly_searches = self._extract_monthly_searches(metrics)
         change_3m, change_yoy = self._calc_changes(monthly_searches)
+        concept_name, concept_group = self._extract_concept(item)
 
         path: list[str] = []
+        if concept_group:
+            path.append(f"Tema Google: {concept_group}")
+        if concept_name and concept_name != concept_group:
+            path.append(f"Conceito: {concept_name}")
         if competition:
             path.append(f"Concorrência: {self._pt_competition(competition)}")
         if isinstance(competition_index, int):
@@ -418,6 +436,8 @@ class GoogleKeywordService:
             menor_lance_topo=(low_bid / 1_000_000) if low_bid is not None else None,
             maior_lance_topo=(high_bid / 1_000_000) if high_bid is not None else None,
             searches_mensais=monthly_searches,
+            google_concept=concept_name,
+            google_concept_group=concept_group,
         )
 
     def _call_batch(
@@ -441,6 +461,7 @@ class GoogleKeywordService:
                 "keywordSeed": {"keywords": batch},
                 "includeAdultKeywords": settings.google_ads_include_adult_keywords,
                 "keywordPlanNetwork": "GOOGLE_SEARCH_AND_PARTNERS",
+                "keywordAnnotation": ["KEYWORD_CONCEPT"],
                 "pageSize": page_size,
             }
             if page_token:

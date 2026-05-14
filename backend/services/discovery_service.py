@@ -97,14 +97,13 @@ def _categorize_items(
     items: list[InterestItem],
     seed_keywords: list[str],
 ) -> dict[str, list[InterestItem]]:
-    keyword_names = [item.name for item in items]
-    if not keyword_names:
+    if not items:
         return {}
 
     try:
-        categories_map = ai_service.categorize_keywords(keyword_names, seed_keywords=seed_keywords)
+        categories_map = ai_service.categorize_items(items, seed_keywords=seed_keywords)
     except Exception:
-        logger.exception("Falha na categorizacao IA — mantendo apenas aba Geral")
+        logger.exception("Falha na categorizacao — mantendo apenas aba Geral")
         return {}
 
     name_to_item = {item.name.lower(): item for item in items}
