@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 import { searchGoogleDiscovery, suggestGoogleLocations, searchMetaInterests } from "../lib/api";
 import { discoveryExportFilename, downloadDiscoveryCsv, downloadDiscoveryXlsx } from "../lib/exportDiscovery";
@@ -375,9 +376,11 @@ export default function HomePage() {
           <span>P12 / Keywords</span>
         </div>
         <div className="topbar-meta">
+          <Link href="/multi" style={{ color: "var(--accent)" }}>Multi-aba →</Link>
+          <span className="brand-divider">·</span>
           <span className="signal-dot">API online</span>
           <span className="brand-divider">·</span>
-          <span>v0.2.0</span>
+          <span>v0.3.0</span>
           <span className="brand-divider">·</span>
           <span>PT-BR</span>
         </div>

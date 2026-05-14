@@ -271,7 +271,64 @@ def _safe_sheet_title(name: str, used: set[str]) -> str:
     return candidate
 
 
+def _format_location_from_loc_string(loc: str) -> str:
+    cleaned = re.sub(r"^(city|state|country):", "", loc.strip(), flags=re.IGNORECASE)
+    cleaned = cleaned.split("#")[0].strip()
+    return f"Local: {cleaned.title()}" if cleaned else "Local: -"
+
+
+def _generate_xlsx_multi(study: dict) -> bytes:
+    wb = Workbook()
+    used_titles: set[str] = set()
+    month_name, year = _study_month_year(study)
+
+    default_locations = study.get("default_locations") or []
+    default_location_label = (
+        _format_location_from_loc_string(default_locations[0])
+        if default_locations
+        else f"Local: {(study.get('country') or '').upper() or '-'}"
+    )
+
+    tabs = study.get("tabs") or []
+    first = True
+    for tab in tabs:
+        name = tab.get("name") or "Aba"
+        seeds = tab.get("seeds") or []
+        items = tab.get("items") or []
+        tab_locations = tab.get("locations") or default_locations
+        location_label = (
+            _format_location_from_loc_string(tab_locations[0])
+            if tab_locations
+            else default_location_label
+        )
+
+        if first:
+            ws = wb.active
+            ws.title = _safe_sheet_title(name, used_titles)
+            first = False
+        else:
+            ws = wb.create_sheet(title=_safe_sheet_title(name, used_titles))
+
+        _write_sheet(ws, items, seeds, location_label, month_name, year)
+
+    if first:
+        ws = wb.active
+        ws.title = _safe_sheet_title("Geral", used_titles)
+        _write_sheet(ws, [], [], default_location_label, month_name, year)
+
+    ws_neg = wb.create_sheet(title=_safe_sheet_title("Palavras Negativas", used_titles))
+    _write_negativas(ws_neg)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
 def generate_xlsx(study: dict) -> bytes:
+    if isinstance(study.get("tabs"), list):
+        return _generate_xlsx_multi(study)
+
     wb = Workbook()
     used_titles: set[str] = set()
 

@@ -95,3 +95,61 @@ export async function downloadDiscoveryXlsx(discovery: DiscoveryResult): Promise
   if (!response.ok) throw new Error("Erro ao gerar XLSX.");
   return response.blob();
 }
+
+export interface MultiTabSpec {
+  name: string;
+  seeds: string[];
+  locations?: string[];
+  country?: string;
+  limit?: number;
+}
+
+export interface MultiStudyPayload {
+  tabs: MultiTabSpec[];
+  locations: string[];
+  country: string;
+  limit: number;
+}
+
+export interface MultiTabResult {
+  name: string;
+  seeds: string[];
+  items: Record<string, unknown>[];
+  error?: string;
+}
+
+export interface MultiStudyResult {
+  id: string;
+  created_at: string;
+  country: string;
+  default_locations: string[];
+  tabs: MultiTabResult[];
+}
+
+export async function generateMultiStudy(payload: MultiStudyPayload): Promise<MultiStudyResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/google/multi-study`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error(`Nao foi possivel conectar ao backend em ${API_BASE_URL || "mesma origem"}.`);
+  }
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: "Erro ao gerar estudo multi-aba." }));
+    throw new Error(err?.detail ?? "Erro ao gerar estudo multi-aba.");
+  }
+  return (await response.json()) as MultiStudyResult;
+}
+
+export async function downloadMultiStudyXlsx(study: MultiStudyResult): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}/api/google/study/export`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(study),
+  });
+  if (!response.ok) throw new Error("Erro ao gerar XLSX.");
+  return response.blob();
+}
