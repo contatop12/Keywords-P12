@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from backend.services import export_service, multi_study_service, study_service
+from backend.services import export_service, keyword_planner_agent, multi_study_service, study_service
 from backend.services.agebri_service import run_agebri
 from backend.services.sheets_export_service import write_study_to_sheets
 
@@ -21,6 +21,26 @@ class StudyRequest(BaseModel):
 
     def effective_keywords(self) -> list[str]:
         return [kw.strip() for kw in self.keywords if kw and kw.strip()]
+
+
+class PlanBriefRequest(BaseModel):
+    cliente: str = Field(min_length=1, max_length=120)
+    especialidade: str = Field(default="", max_length=200)
+    url: str = Field(default="", max_length=400)
+    localizacao: str = Field(default="", max_length=200)
+    objetivo: str = Field(default="", max_length=400)
+    servicos: list[str] = Field(default_factory=list)
+    concorrentes: list[str] = Field(default_factory=list)
+    observacoes: str = Field(default="", max_length=2000)
+
+
+@router.post("/plan-keywords")
+def plan_keywords(payload: PlanBriefRequest) -> dict:
+    try:
+        return keyword_planner_agent.plan_keywords(payload.model_dump())
+    except Exception as exc:
+        logger.exception("Erro ao gerar plano de keywords")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 class TabRequest(BaseModel):

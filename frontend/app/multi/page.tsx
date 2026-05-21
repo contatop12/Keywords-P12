@@ -8,9 +8,11 @@ import {
   downloadMultiStudyXlsx,
   exportMultiStudyToSheets,
   runAgebri,
+  planKeywords,
   suggestGoogleLocations,
   MultiStudyResult,
   MultiTabSpec,
+  PlanResult,
 } from "../../lib/api";
 import { AgebriResult, BriefingData, GeoSuggestionItem } from "../../lib/types";
 
@@ -97,6 +99,101 @@ export default function MultiStudyPage() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [sheetsLoading, setSheetsLoading] = useState(false);
+
+  const [brief, setBrief] = useState({
+    cliente: "",
+    especialidade: "",
+    url: "",
+    localizacao: "",
+    objetivo: "",
+    servicosInput: "",
+    servicos: [] as string[],
+    concorrentesInput: "",
+    concorrentes: [] as string[],
+    observacoes: "",
+  });
+  const [planLoading, setPlanLoading] = useState(false);
+  const [planEstrategia, setPlanEstrategia] = useState<string>("");
+  const [briefOpen, setBriefOpen] = useState(true);
+
+  function commitBriefList(field: "servicos" | "concorrentes") {
+    setBrief((prev) => {
+      const inputKey = `${field}Input` as "servicosInput" | "concorrentesInput";
+      const parsed = splitSeeds(prev[inputKey]);
+      const seen = new Set(prev[field].map((s) => s.toLowerCase()));
+      const merged = [...prev[field]];
+      for (const v of parsed) {
+        if (seen.has(v.toLowerCase())) continue;
+        seen.add(v.toLowerCase());
+        merged.push(v);
+      }
+      return { ...prev, [field]: merged, [inputKey]: "" };
+    });
+  }
+
+  function removeBriefItem(field: "servicos" | "concorrentes", value: string) {
+    setBrief((prev) => ({ ...prev, [field]: prev[field].filter((v) => v !== value) }));
+  }
+
+  async function onGeneratePlan() {
+    if (!brief.cliente.trim() || !brief.especialidade.trim()) {
+      setError("Preencha ao menos Cliente e Especialidade no briefing.");
+      return;
+    }
+    setError(null);
+    setPlanLoading(true);
+    setStatus("Agente gerando clusters de palavras-chave…");
+    try {
+      const finalServicos = [...brief.servicos];
+      const finalConcorrentes = [...brief.concorrentes];
+      const pendingServicos = splitSeeds(brief.servicosInput);
+      const pendingConcorrentes = splitSeeds(brief.concorrentesInput);
+      const seenS = new Set(finalServicos.map((s) => s.toLowerCase()));
+      for (const s of pendingServicos) {
+        if (seenS.has(s.toLowerCase())) continue;
+        seenS.add(s.toLowerCase());
+        finalServicos.push(s);
+      }
+      const seenC = new Set(finalConcorrentes.map((s) => s.toLowerCase()));
+      for (const c of pendingConcorrentes) {
+        if (seenC.has(c.toLowerCase())) continue;
+        seenC.add(c.toLowerCase());
+        finalConcorrentes.push(c);
+      }
+
+      const plan: PlanResult = await planKeywords({
+        cliente: brief.cliente.trim(),
+        especialidade: brief.especialidade.trim(),
+        url: brief.url.trim(),
+        localizacao: brief.localizacao.trim(),
+        objetivo: brief.objetivo.trim(),
+        servicos: finalServicos,
+        concorrentes: finalConcorrentes,
+        observacoes: brief.observacoes.trim(),
+      });
+
+      if (plan.clusters.length === 0) {
+        setError("Agente não retornou clusters. Tente refinar o briefing.");
+        return;
+      }
+
+      setPlanEstrategia(plan.estrategia);
+      setTabs(
+        plan.clusters.map((c) => ({
+          id: makeId(),
+          name: c.nome,
+          seedsInput: "",
+          seeds: c.seeds,
+        }))
+      );
+      setStatus(`${plan.clusters.length} clusters gerados pelo agente. Revise e gere o estudo.`);
+      setBriefOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao gerar plano.");
+    } finally {
+      setPlanLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!geoInput.trim()) {
@@ -545,9 +642,165 @@ export default function MultiStudyPage() {
       )}
 
       {/* ── ETAPA 2: ABAS DO ESTUDO ─────────────────────────────────────── */}
+      <section className="panel" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <span className="panel-label mono">
+            <span className="accent">●</span> agente IA · briefing do cliente
+          </span>
+          <button type="button" className="btn-ghost mono" onClick={() => setBriefOpen((o) => !o)}>
+            {briefOpen ? "Recolher" : "Expandir"}
+          </button>
+        </div>
+
+        {briefOpen && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div className="field">
+              <label htmlFor="brief-cliente">
+                <span className="idx">01</span> Cliente
+              </label>
+              <input
+                id="brief-cliente"
+                value={brief.cliente}
+                onChange={(e) => setBrief((p) => ({ ...p, cliente: e.target.value }))}
+                placeholder="Ex: Tainã Aci"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="brief-especialidade">
+                <span className="idx">02</span> Especialidade / nicho
+              </label>
+              <input
+                id="brief-especialidade"
+                value={brief.especialidade}
+                onChange={(e) => setBrief((p) => ({ ...p, especialidade: e.target.value }))}
+                placeholder="Ex: endocrinologista premium foco em obesidade"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="brief-url">
+                <span className="idx">03</span> URL principal
+              </label>
+              <input
+                id="brief-url"
+                value={brief.url}
+                onChange={(e) => setBrief((p) => ({ ...p, url: e.target.value }))}
+                placeholder="https://endocrinologista.tainaaci.com.br/vila-mariana-sp"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="brief-local">
+                <span className="idx">04</span> Localização
+              </label>
+              <input
+                id="brief-local"
+                value={brief.localizacao}
+                onChange={(e) => setBrief((p) => ({ ...p, localizacao: e.target.value }))}
+                placeholder="Vila Mariana, São Paulo - SP"
+              />
+            </div>
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <label htmlFor="brief-obj">
+                <span className="idx">05</span> Objetivo principal
+              </label>
+              <input
+                id="brief-obj"
+                value={brief.objetivo}
+                onChange={(e) => setBrief((p) => ({ ...p, objetivo: e.target.value }))}
+                placeholder="Geração de leads qualificados para consulta presencial e online"
+              />
+            </div>
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <label htmlFor="brief-serv">
+                <span className="idx">06</span> Serviços / temas (Enter ou vírgula)
+              </label>
+              <div className="chips-box">
+                {brief.servicos.map((s) => (
+                  <span className="chip-kw mono" key={s}>
+                    {s}
+                    <button type="button" onClick={() => removeBriefItem("servicos", s)} aria-label={`Remover ${s}`}>
+                      ×
+                    </button>
+                  </span>
+                ))}
+                <input
+                  id="brief-serv"
+                  value={brief.servicosInput}
+                  onChange={(e) => setBrief((p) => ({ ...p, servicosInput: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      commitBriefList("servicos");
+                    }
+                  }}
+                  onBlur={() => commitBriefList("servicos")}
+                  placeholder="Ex: menopausa, teste genético, obesidade, GLP-1…"
+                />
+              </div>
+            </div>
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <label htmlFor="brief-conc">
+                <span className="idx">07</span> Concorrentes (criará uma aba por nome)
+              </label>
+              <div className="chips-box">
+                {brief.concorrentes.map((s) => (
+                  <span className="chip-kw mono" key={s}>
+                    {s}
+                    <button type="button" onClick={() => removeBriefItem("concorrentes", s)} aria-label={`Remover ${s}`}>
+                      ×
+                    </button>
+                  </span>
+                ))}
+                <input
+                  id="brief-conc"
+                  value={brief.concorrentesInput}
+                  onChange={(e) => setBrief((p) => ({ ...p, concorrentesInput: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      commitBriefList("concorrentes");
+                    }
+                  }}
+                  onBlur={() => commitBriefList("concorrentes")}
+                  placeholder="Ex: Dra. Paula Pires, Dra Viviane - Endoquali, Instituto Evolution…"
+                />
+              </div>
+            </div>
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <label htmlFor="brief-obs">
+                <span className="idx">08</span> Observações livres
+              </label>
+              <textarea
+                id="brief-obs"
+                value={brief.observacoes}
+                onChange={(e) => setBrief((p) => ({ ...p, observacoes: e.target.value }))}
+                placeholder="Restrições, preferências, posicionamento, ticket médio, etc."
+                rows={3}
+                style={{ width: "100%", padding: 10, background: "transparent", color: "inherit", border: "1px solid var(--border)", fontFamily: "inherit" }}
+              />
+            </div>
+            <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className={`btn-primary ${planLoading ? "is-loading" : ""}`}
+                onClick={onGeneratePlan}
+                disabled={planLoading}
+              >
+                {planLoading ? "Gerando palavras…" : "Gerar palavras com agente IA"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {planEstrategia && (
+          <div className="mono" style={{ marginTop: 14, padding: 12, border: "1px solid var(--border)", color: "var(--text-dim)" }}>
+            <strong style={{ color: "var(--accent)" }}>Estratégia do agente:</strong> {planEstrategia}
+          </div>
+        )}
+      </section>
+
       <form className="panel search search-google" onSubmit={onSubmit}>
         <span className="panel-label mono">
-          <span className="accent">●</span> abas do estudo
+          <span className="accent">●</span> abas do estudo (editáveis)
         </span>
 
         <div className="field" style={{ gridColumn: "1 / -1" }}>

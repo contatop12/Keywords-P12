@@ -144,6 +144,48 @@ export async function generateMultiStudy(payload: MultiStudyPayload): Promise<Mu
   return (await response.json()) as MultiStudyResult;
 }
 
+export interface PlanBriefPayload {
+  cliente: string;
+  especialidade: string;
+  url: string;
+  localizacao: string;
+  objetivo: string;
+  servicos: string[];
+  concorrentes: string[];
+  observacoes: string;
+}
+
+export interface PlanCluster {
+  nome: string;
+  intencao: "alta" | "media" | "baixa";
+  prioridade: number;
+  seeds: string[];
+  observacao: string;
+}
+
+export interface PlanResult {
+  estrategia: string;
+  clusters: PlanCluster[];
+}
+
+export async function planKeywords(payload: PlanBriefPayload): Promise<PlanResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/google/plan-keywords`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error(`Nao foi possivel conectar ao backend em ${API_BASE_URL || "mesma origem"}.`);
+  }
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: "Erro ao gerar plano de keywords." }));
+    throw new Error(err?.detail ?? "Erro ao gerar plano de keywords.");
+  }
+  return (await response.json()) as PlanResult;
+}
+
 export async function downloadMultiStudyXlsx(study: MultiStudyResult): Promise<Blob> {
   const response = await fetch(`${API_BASE_URL}/api/google/study/export`, {
     method: "POST",
