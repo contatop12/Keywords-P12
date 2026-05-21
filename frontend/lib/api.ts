@@ -147,12 +147,13 @@ export async function generateMultiStudy(payload: MultiStudyPayload): Promise<Mu
 export interface PlanBriefPayload {
   cliente: string;
   especialidade: string;
-  url: string;
+  urls: string[];
   localizacao: string;
   objetivo: string;
   servicos: string[];
   concorrentes: string[];
   observacoes: string;
+  negativar: string;
 }
 
 export interface PlanCluster {

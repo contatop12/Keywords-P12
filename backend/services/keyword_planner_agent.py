@@ -47,17 +47,19 @@ _INVALID_SHEET_CHARS = re.compile(r"[\\/*?:\[\]]")
 def _build_user_message(brief: dict) -> str:
     cliente = (brief.get("cliente") or "").strip() or "Cliente sem nome"
     especialidade = (brief.get("especialidade") or "").strip() or "Não informado"
-    url = (brief.get("url") or "").strip() or "-"
+    raw_urls = [u.strip() for u in (brief.get("urls") or []) if u and u.strip()]
+    urls_str = "\n".join(f"- {u}" for u in raw_urls) if raw_urls else "-"
     localizacao = (brief.get("localizacao") or "").strip() or "Brasil"
     objetivo = (brief.get("objetivo") or "Geração de leads para consulta").strip()
     servicos = [s.strip() for s in (brief.get("servicos") or []) if s and s.strip()]
     concorrentes = [c.strip() for c in (brief.get("concorrentes") or []) if c and c.strip()]
     observacoes = (brief.get("observacoes") or "").strip()
+    negativar = (brief.get("negativar") or "").strip()
 
     parts = [
         f"CLIENTE: {cliente}",
         f"ESPECIALIDADE / NICHO: {especialidade}",
-        f"URL PRINCIPAL: {url}",
+        f"SITES DO CLIENTE:\n{urls_str}",
         f"LOCALIZAÇÃO: {localizacao}",
         f"OBJETIVO: {objetivo}",
     ]
@@ -69,6 +71,8 @@ def _build_user_message(brief: dict) -> str:
         parts.append("CONCORRENTES (criar aba por nome):\n- " + "\n- ".join(concorrentes))
     if observacoes:
         parts.append(f"OBSERVAÇÕES LIVRES:\n{observacoes}")
+    if negativar:
+        parts.append(f"TERMOS PARA NEGATIVAR (NÃO incluir nas seeds, evitar esses contextos):\n{negativar}")
     return "\n\n".join(parts)
 
 

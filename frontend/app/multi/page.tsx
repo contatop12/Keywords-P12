@@ -84,7 +84,7 @@ export default function MultiStudyPage() {
   const [brief, setBrief] = useState({
     cliente: "",
     especialidade: "",
-    url: "",
+    urls: [""] as string[],
     localizacao: "",
     objetivo: "",
     servicosInput: "",
@@ -92,6 +92,7 @@ export default function MultiStudyPage() {
     concorrentesInput: "",
     concorrentes: [] as string[],
     observacoes: "",
+    negativar: "",
   });
   const [planLoading, setPlanLoading] = useState(false);
   const [planEstrategia, setPlanEstrategia] = useState<string>("");
@@ -145,12 +146,13 @@ export default function MultiStudyPage() {
       const plan: PlanResult = await planKeywords({
         cliente: brief.cliente.trim(),
         especialidade: brief.especialidade.trim(),
-        url: brief.url.trim(),
+        urls: brief.urls.map((u) => u.trim()).filter(Boolean),
         localizacao: brief.localizacao.trim(),
         objetivo: brief.objetivo.trim(),
         servicos: finalServicos,
         concorrentes: finalConcorrentes,
         observacoes: brief.observacoes.trim(),
+        negativar: brief.negativar.trim(),
       });
 
       if (plan.clusters.length === 0) {
@@ -430,13 +432,37 @@ export default function MultiStudyPage() {
             </div>
 
             <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <label htmlFor="brief-url"><span className="idx">03</span> URL principal</label>
-              <input
-                id="brief-url"
-                value={brief.url}
-                onChange={(e) => setBrief((p) => ({ ...p, url: e.target.value }))}
-                placeholder="https://endocrinologista.tainaaci.com.br/vila-mariana-sp"
-              />
+              <label><span className="idx">03</span> Site(s) do cliente</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {brief.urls.map((u, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: 8 }}>
+                    <input
+                      value={u}
+                      onChange={(e) => setBrief((p) => {
+                        const next = [...p.urls];
+                        next[idx] = e.target.value;
+                        return { ...p, urls: next };
+                      })}
+                      placeholder="https://clinicabellaforma.com.br"
+                      type="url"
+                      style={{ flex: 1 }}
+                    />
+                    {brief.urls.length > 1 && (
+                      <button
+                        type="button"
+                        className="btn-ghost mono"
+                        onClick={() => setBrief((p) => ({ ...p, urls: p.urls.filter((_, i) => i !== idx) }))}
+                      >×</button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="btn-ghost mono"
+                  onClick={() => setBrief((p) => ({ ...p, urls: [...p.urls, ""] }))}
+                  style={{ alignSelf: "flex-start" }}
+                >+ Adicionar URL</button>
+              </div>
             </div>
 
             <div className="field" style={{ gridColumn: "1 / -1" }}>
@@ -509,7 +535,18 @@ export default function MultiStudyPage() {
                 id="brief-obs"
                 value={brief.observacoes}
                 onChange={(e) => setBrief((p) => ({ ...p, observacoes: e.target.value }))}
-                placeholder="Restrições, preferências, posicionamento, ticket médio, etc."
+                placeholder="Posicionamento, público-alvo, ticket médio, diferenciais, etc."
+                rows={3}
+              />
+            </div>
+
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <label htmlFor="brief-neg"><span className="idx">09</span> Negativar / Restringir</label>
+              <textarea
+                id="brief-neg"
+                value={brief.negativar}
+                onChange={(e) => setBrief((p) => ({ ...p, negativar: e.target.value }))}
+                placeholder="plano de saúde, convênio, SUS, gratuito, curso, emprego, salário, aparelho, manutenção…"
                 rows={3}
               />
             </div>

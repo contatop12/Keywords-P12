@@ -26,12 +26,13 @@ class StudyRequest(BaseModel):
 class PlanBriefRequest(BaseModel):
     cliente: str = Field(min_length=1, max_length=120)
     especialidade: str = Field(default="", max_length=200)
-    url: str = Field(default="", max_length=400)
+    urls: list[str] = Field(default_factory=list)
     localizacao: str = Field(default="", max_length=200)
     objetivo: str = Field(default="", max_length=400)
     servicos: list[str] = Field(default_factory=list)
     concorrentes: list[str] = Field(default_factory=list)
     observacoes: str = Field(default="", max_length=2000)
+    negativar: str = Field(default="", max_length=2000)
 
 
 @router.post("/plan-keywords")
