@@ -465,7 +465,7 @@ export default function MultiStudyPage() {
       {/* ── ETAPA 1: BRIEFING + AGEBRI ────────────────────────────────── */}
       <div className="panel search search-google">
         <span className="panel-label mono">
-          <span className="accent">●</span> agente IA · briefing do cliente
+          <span className="accent">●</span> AGEBRI · análise de briefing
         </span>
 
         <div className="field" style={{ gridColumn: "1 / -1" }}>
@@ -593,7 +593,7 @@ export default function MultiStudyPage() {
 
       {/* ── RESULTADO AGEBRI ────────────────────────────────────────────── */}
       {agebriResult && (
-        <div className="panel" style={{ marginTop: 0 }}>
+        <div className="panel" style={{ marginTop: 32 }}>
           <span className="panel-label mono">
             <span className="accent">●</span> AGEBRI · resultado
           </span>
@@ -641,23 +641,16 @@ export default function MultiStudyPage() {
         </div>
       )}
 
-      {/* ── ETAPA 2: ABAS DO ESTUDO ─────────────────────────────────────── */}
-      <section className="panel" style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <span className="panel-label mono">
-            <span className="accent">●</span> agente IA · briefing do cliente
-          </span>
-          <button type="button" className="btn-ghost mono" onClick={() => setBriefOpen((o) => !o)}>
-            {briefOpen ? "Recolher" : "Expandir"}
-          </button>
-        </div>
+      {/* ── ETAPA 2: KEYWORD PLANNER AGENT ─────────────────────────────── */}
+      <div className="panel search search-google" style={{ marginTop: 32 }}>
+        <span className="panel-label mono">
+          <span className="accent">●</span> agente IA · keyword clusters
+        </span>
 
         {briefOpen && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <div className="field">
-              <label htmlFor="brief-cliente">
-                <span className="idx">01</span> Cliente
-              </label>
+          <>
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <label htmlFor="brief-cliente"><span className="idx">01</span> Cliente</label>
               <input
                 id="brief-cliente"
                 value={brief.cliente}
@@ -665,10 +658,9 @@ export default function MultiStudyPage() {
                 placeholder="Ex: Tainã Aci"
               />
             </div>
-            <div className="field">
-              <label htmlFor="brief-especialidade">
-                <span className="idx">02</span> Especialidade / nicho
-              </label>
+
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <label htmlFor="brief-especialidade"><span className="idx">02</span> Especialidade / nicho</label>
               <input
                 id="brief-especialidade"
                 value={brief.especialidade}
@@ -676,10 +668,9 @@ export default function MultiStudyPage() {
                 placeholder="Ex: endocrinologista premium foco em obesidade"
               />
             </div>
-            <div className="field">
-              <label htmlFor="brief-url">
-                <span className="idx">03</span> URL principal
-              </label>
+
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <label htmlFor="brief-url"><span className="idx">03</span> URL principal</label>
               <input
                 id="brief-url"
                 value={brief.url}
@@ -687,10 +678,9 @@ export default function MultiStudyPage() {
                 placeholder="https://endocrinologista.tainaaci.com.br/vila-mariana-sp"
               />
             </div>
-            <div className="field">
-              <label htmlFor="brief-local">
-                <span className="idx">04</span> Localização
-              </label>
+
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <label htmlFor="brief-local"><span className="idx">04</span> Localização</label>
               <input
                 id="brief-local"
                 value={brief.localizacao}
@@ -698,10 +688,9 @@ export default function MultiStudyPage() {
                 placeholder="Vila Mariana, São Paulo - SP"
               />
             </div>
+
             <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <label htmlFor="brief-obj">
-                <span className="idx">05</span> Objetivo principal
-              </label>
+              <label htmlFor="brief-obj"><span className="idx">05</span> Objetivo principal</label>
               <input
                 id="brief-obj"
                 value={brief.objetivo}
@@ -709,17 +698,14 @@ export default function MultiStudyPage() {
                 placeholder="Geração de leads qualificados para consulta presencial e online"
               />
             </div>
+
             <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <label htmlFor="brief-serv">
-                <span className="idx">06</span> Serviços / temas (Enter ou vírgula)
-              </label>
+              <label htmlFor="brief-serv"><span className="idx">06</span> Serviços / temas (Enter ou vírgula)</label>
               <div className="chips-box">
                 {brief.servicos.map((s) => (
                   <span className="chip-kw mono" key={s}>
                     {s}
-                    <button type="button" onClick={() => removeBriefItem("servicos", s)} aria-label={`Remover ${s}`}>
-                      ×
-                    </button>
+                    <button type="button" onClick={() => removeBriefItem("servicos", s)} aria-label={`Remover ${s}`}>×</button>
                   </span>
                 ))}
                 <input
@@ -727,27 +713,21 @@ export default function MultiStudyPage() {
                   value={brief.servicosInput}
                   onChange={(e) => setBrief((p) => ({ ...p, servicosInput: e.target.value }))}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === ",") {
-                      e.preventDefault();
-                      commitBriefList("servicos");
-                    }
+                    if (e.key === "Enter" || e.key === ",") { e.preventDefault(); commitBriefList("servicos"); }
                   }}
                   onBlur={() => commitBriefList("servicos")}
                   placeholder="Ex: menopausa, teste genético, obesidade, GLP-1…"
                 />
               </div>
             </div>
+
             <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <label htmlFor="brief-conc">
-                <span className="idx">07</span> Concorrentes (criará uma aba por nome)
-              </label>
+              <label htmlFor="brief-conc"><span className="idx">07</span> Concorrentes (criará uma aba por nome)</label>
               <div className="chips-box">
                 {brief.concorrentes.map((s) => (
                   <span className="chip-kw mono" key={s}>
                     {s}
-                    <button type="button" onClick={() => removeBriefItem("concorrentes", s)} aria-label={`Remover ${s}`}>
-                      ×
-                    </button>
+                    <button type="button" onClick={() => removeBriefItem("concorrentes", s)} aria-label={`Remover ${s}`}>×</button>
                   </span>
                 ))}
                 <input
@@ -755,50 +735,51 @@ export default function MultiStudyPage() {
                   value={brief.concorrentesInput}
                   onChange={(e) => setBrief((p) => ({ ...p, concorrentesInput: e.target.value }))}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === ",") {
-                      e.preventDefault();
-                      commitBriefList("concorrentes");
-                    }
+                    if (e.key === "Enter" || e.key === ",") { e.preventDefault(); commitBriefList("concorrentes"); }
                   }}
                   onBlur={() => commitBriefList("concorrentes")}
                   placeholder="Ex: Dra. Paula Pires, Dra Viviane - Endoquali, Instituto Evolution…"
                 />
               </div>
             </div>
+
             <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <label htmlFor="brief-obs">
-                <span className="idx">08</span> Observações livres
-              </label>
+              <label htmlFor="brief-obs"><span className="idx">08</span> Observações livres</label>
               <textarea
                 id="brief-obs"
                 value={brief.observacoes}
                 onChange={(e) => setBrief((p) => ({ ...p, observacoes: e.target.value }))}
                 placeholder="Restrições, preferências, posicionamento, ticket médio, etc."
                 rows={3}
-                style={{ width: "100%", padding: 10, background: "transparent", color: "inherit", border: "1px solid var(--border)", fontFamily: "inherit" }}
               />
             </div>
-            <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                className={`btn-primary ${planLoading ? "is-loading" : ""}`}
-                onClick={onGeneratePlan}
-                disabled={planLoading}
-              >
-                {planLoading ? "Gerando palavras…" : "Gerar palavras com agente IA"}
-              </button>
-            </div>
-          </div>
+          </>
         )}
 
+        <div className="submit-wrap" style={{ gridColumn: "1 / -1", display: "flex", gap: 12, justifyContent: "space-between" }}>
+          <button type="button" className="btn-ghost mono" onClick={() => setBriefOpen((o) => !o)}>
+            {briefOpen ? "Recolher ▲" : "Expandir ▼"}
+          </button>
+          {briefOpen && (
+            <button
+              type="button"
+              className={`btn-primary ${planLoading ? "is-loading" : ""}`}
+              onClick={onGeneratePlan}
+              disabled={planLoading}
+            >
+              {planLoading ? "Gerando palavras…" : "Gerar palavras com agente IA"}
+            </button>
+          )}
+        </div>
+
         {planEstrategia && (
-          <div className="mono" style={{ marginTop: 14, padding: 12, border: "1px solid var(--border)", color: "var(--text-dim)" }}>
+          <div className="field mono" style={{ gridColumn: "1 / -1", color: "var(--text-dim)" }}>
             <strong style={{ color: "var(--accent)" }}>Estratégia do agente:</strong> {planEstrategia}
           </div>
         )}
-      </section>
+      </div>
 
-      <form className="panel search search-google" onSubmit={onSubmit}>
+      <form className="panel search search-google" style={{ marginTop: 32 }} onSubmit={onSubmit}>
         <span className="panel-label mono">
           <span className="accent">●</span> abas do estudo (editáveis)
         </span>
