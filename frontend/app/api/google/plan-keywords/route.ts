@@ -1,8 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { planKeywords } from "../../../../lib/server/keywordPlanner";
 
-export const runtime = "edge";
-
 export async function POST(req: Request) {
   try {
     const brief = await req.json();
