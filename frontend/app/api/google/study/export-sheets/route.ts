@@ -182,10 +182,10 @@ export async function POST(req: Request) {
     const env = ctx.env as unknown as Record<string, string | undefined>;
     const readEnv = (key: string) => env[key] ?? process.env[key];
 
-    const clientId = readEnv("GOOGLE_ADS_CLIENT_ID") ?? readEnv("GOOGLE_CLIENT_ID") ?? "";
-    const clientSecret = readEnv("GOOGLE_ADS_CLIENT_SECRET") ?? readEnv("GOOGLE_CLIENT_SECRET") ?? "";
-    const refreshToken = readEnv("GOOGLE_ADS_REFRESH_TOKEN") ?? readEnv("GOOGLE_REFRESH_TOKEN") ?? "";
-    const templateId = readEnv("GOOGLE_SHEETS_TEMPLATE_ID") ?? "1pGKcVyFiWWvslaPMsmcwkTWI4AS4LdRGi4vVSRS-vAY";
+    const clientId = (readEnv("GOOGLE_ADS_CLIENT_ID") ?? readEnv("GOOGLE_CLIENT_ID") ?? "").trim();
+    const clientSecret = (readEnv("GOOGLE_ADS_CLIENT_SECRET") ?? readEnv("GOOGLE_CLIENT_SECRET") ?? "").trim();
+    const refreshToken = (readEnv("GOOGLE_ADS_REFRESH_TOKEN") ?? readEnv("GOOGLE_REFRESH_TOKEN") ?? "").trim();
+    const templateId = (readEnv("GOOGLE_SHEETS_TEMPLATE_ID") ?? "1pGKcVyFiWWvslaPMsmcwkTWI4AS4LdRGi4vVSRS-vAY").trim();
 
     if (!clientId || !clientSecret || !refreshToken) {
       return Response.json({ detail: "Credenciais Google ausentes. Configure GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET e GOOGLE_ADS_REFRESH_TOKEN." }, { status: 500 });

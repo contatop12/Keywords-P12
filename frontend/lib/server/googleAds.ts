@@ -101,19 +101,23 @@ function percentage(current: number | null, prev: number | null): string | null 
   return `${pct >= 0 ? "+" : ""}${Math.round(pct)}%`;
 }
 
+function e(readEnv: (key: string) => string | undefined, key: string, fallback = ""): string {
+  return (readEnv(key) ?? fallback).trim();
+}
+
 export function readAdsConfig(
   readEnv: (key: string) => string | undefined
 ): AdsConfig {
   return {
-    clientId: readEnv("GOOGLE_ADS_CLIENT_ID") ?? "",
-    clientSecret: readEnv("GOOGLE_ADS_CLIENT_SECRET") ?? "",
-    refreshToken: readEnv("GOOGLE_ADS_REFRESH_TOKEN") ?? "",
-    developerToken: readEnv("GOOGLE_ADS_DEVELOPER_TOKEN") ?? "",
-    customerId: (readEnv("GOOGLE_ADS_MCC_ID") ?? "").replace(/-/g, ""),
-    loginCustomerId: (readEnv("GOOGLE_ADS_LOGIN_CUSTOMER_ID") ?? "").replace(/-/g, ""),
-    apiVersion: readEnv("GOOGLE_ADS_API_VERSION") ?? "v20",
-    defaultLanguageId: readEnv("GOOGLE_ADS_DEFAULT_LANGUAGE_ID") ?? "1000",
-    includeAdultKeywords: parseBool(readEnv("GOOGLE_ADS_INCLUDE_ADULT_KEYWORDS"), true),
+    clientId: e(readEnv, "GOOGLE_ADS_CLIENT_ID"),
+    clientSecret: e(readEnv, "GOOGLE_ADS_CLIENT_SECRET"),
+    refreshToken: e(readEnv, "GOOGLE_ADS_REFRESH_TOKEN"),
+    developerToken: e(readEnv, "GOOGLE_ADS_DEVELOPER_TOKEN"),
+    customerId: e(readEnv, "GOOGLE_ADS_MCC_ID").replace(/-/g, ""),
+    loginCustomerId: e(readEnv, "GOOGLE_ADS_LOGIN_CUSTOMER_ID").replace(/-/g, ""),
+    apiVersion: e(readEnv, "GOOGLE_ADS_API_VERSION") || "v20",
+    defaultLanguageId: e(readEnv, "GOOGLE_ADS_DEFAULT_LANGUAGE_ID") || "1000",
+    includeAdultKeywords: parseBool(e(readEnv, "GOOGLE_ADS_INCLUDE_ADULT_KEYWORDS"), true),
   };
 }
 
