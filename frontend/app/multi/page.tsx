@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 import {
@@ -95,8 +95,10 @@ export default function MultiStudyPage() {
     negativar: "",
   });
   const [planLoading, setPlanLoading] = useState(false);
+  const [planProgress, setPlanProgress] = useState(0);
   const [planEstrategia, setPlanEstrategia] = useState<string>("");
   const [briefOpen, setBriefOpen] = useState(true);
+  const planProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function commitBriefList(field: "servicos" | "concorrentes") {
     setBrief((prev) => {
@@ -124,7 +126,15 @@ export default function MultiStudyPage() {
     }
     setError(null);
     setPlanLoading(true);
+    setPlanProgress(0);
     setStatus("Agente gerando clusters de palavras-chave…");
+    if (planProgressRef.current) clearInterval(planProgressRef.current);
+    planProgressRef.current = setInterval(() => {
+      setPlanProgress((prev) => {
+        if (prev >= 88) { clearInterval(planProgressRef.current!); return 88; }
+        return prev + Math.random() * 6 + 2;
+      });
+    }, 600);
     try {
       const finalServicos = [...brief.servicos];
       const finalConcorrentes = [...brief.concorrentes];
@@ -160,6 +170,8 @@ export default function MultiStudyPage() {
         return;
       }
 
+      clearInterval(planProgressRef.current!);
+      setPlanProgress(100);
       setPlanEstrategia(plan.estrategia);
       setTabs(
         plan.clusters.map((c) => ({
@@ -172,6 +184,8 @@ export default function MultiStudyPage() {
       setStatus(`${plan.clusters.length} clusters gerados pelo agente. Revise e gere o estudo.`);
       setBriefOpen(false);
     } catch (err) {
+      clearInterval(planProgressRef.current!);
+      setPlanProgress(0);
       setError(err instanceof Error ? err.message : "Falha ao gerar plano.");
     } finally {
       setPlanLoading(false);
@@ -564,7 +578,9 @@ export default function MultiStudyPage() {
               onClick={onGeneratePlan}
               disabled={planLoading}
             >
-              {planLoading ? "Gerando palavras…" : "Gerar palavras com agente IA"}
+              {planLoading
+                ? `Gerando… ${Math.round(Math.min(planProgress, 99))}%`
+                : "Gerar palavras com agente IA"}
             </button>
           )}
         </div>
