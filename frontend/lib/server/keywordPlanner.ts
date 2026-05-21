@@ -134,9 +134,9 @@ function sanitizeCluster(raw: unknown): PlanCluster | null {
 }
 
 export async function planKeywords(readEnv: ReadEnv, brief: PlanBrief): Promise<PlanResult> {
-  const apiKey = readEnv("OPENROUTER_API_KEY") ?? "";
-  const baseUrl = readEnv("OPENROUTER_BASE_URL") ?? "https://openrouter.ai/api/v1";
-  const model = readEnv("OPENROUTER_MODEL") ?? "google/gemini-flash-1.5";
+  const apiKey = (readEnv("OPENROUTER_API_KEY") ?? "").trim();
+  const baseUrl = (readEnv("OPENROUTER_BASE_URL") ?? "https://openrouter.ai/api/v1").trim();
+  const model = (readEnv("OPENROUTER_MODEL") ?? "google/gemini-flash-1.5").trim();
 
   if (!apiKey) throw new Error("OPENROUTER_API_KEY não configurado");
 
