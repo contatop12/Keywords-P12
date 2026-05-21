@@ -2,6 +2,7 @@
 credentials.json
 token.json
 client_secret.json
+client_secret*.json
 .tmp/*
 !.tmp/.gitkeep
 __pycache__/
