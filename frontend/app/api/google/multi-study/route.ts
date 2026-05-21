@@ -36,6 +36,8 @@ export async function POST(req: Request) {
     const defCountry = (payload.country ?? "BR").toUpperCase();
     const defLimit = Math.max(1, Number(payload.limit ?? 50));
 
+    const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
     const tabResults = await Promise.all(
       tabs.map(async (tab, index) => {
         const name = (tab.name ?? `Aba ${index + 1}`).trim();
@@ -46,12 +48,24 @@ export async function POST(req: Request) {
         const locations = tab.locations?.length ? tab.locations : defLocations;
         const country = (tab.country ?? defCountry).toUpperCase();
         const limit = Math.max(1, Number(tab.limit ?? defLimit));
-        try {
-          const items = await googleKeywordSearch({ readEnv, keywords: seeds, country, limit, locations });
-          return { name, seeds, items };
-        } catch (err) {
-          return { name, seeds, items: [], error: err instanceof Error ? err.message : "Erro desconhecido." };
+
+        if (index > 0) await delay(index * 2000);
+
+        for (let attempt = 0; attempt <= 2; attempt++) {
+          try {
+            const items = await googleKeywordSearch({ readEnv, keywords: seeds, country, limit, locations });
+            return { name, seeds, items };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "Erro desconhecido.";
+            const isRateLimit = msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429");
+            if (isRateLimit && attempt < 2) {
+              await delay(7000);
+              continue;
+            }
+            return { name, seeds, items: [], error: msg };
+          }
         }
+        return { name, seeds, items: [], error: "Max retries atingido." };
       })
     );
 
