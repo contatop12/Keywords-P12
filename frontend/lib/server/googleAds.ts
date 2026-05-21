@@ -116,7 +116,7 @@ export function readAdsConfig(
     customerId: e(readEnv, "GOOGLE_ADS_MCC_ID").replace(/-/g, ""),
     loginCustomerId: e(readEnv, "GOOGLE_ADS_LOGIN_CUSTOMER_ID").replace(/-/g, ""),
     apiVersion: e(readEnv, "GOOGLE_ADS_API_VERSION") || "v20",
-    defaultLanguageId: e(readEnv, "GOOGLE_ADS_DEFAULT_LANGUAGE_ID") || "1000",
+    defaultLanguageId: e(readEnv, "GOOGLE_ADS_DEFAULT_LANGUAGE_ID") || "1014",
     includeAdultKeywords: parseBool(e(readEnv, "GOOGLE_ADS_INCLUDE_ADULT_KEYWORDS"), true),
   };
 }

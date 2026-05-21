@@ -800,13 +800,18 @@ export default function MultiStudyPage() {
                 onClick={() => setActiveTab(tab.name)}
               >
                 {tab.name}
-                <span style={{ color: "var(--text-faint)", marginLeft: 6, fontSize: 10 }}>
-                  ({tab.items.length})
+                <span style={{ color: tab.error ? "var(--error, #f55)" : "var(--text-faint)", marginLeft: 6, fontSize: 10 }}>
+                  {tab.error ? "!" : `(${tab.items.length})`}
                 </span>
               </button>
             ))}
           </div>
 
+          {result.tabs.find((t) => t.name === activeTab)?.error && (
+            <div className="status error mono" style={{ marginBottom: 0 }}>
+              Erro na aba {activeTab}: {result.tabs.find((t) => t.name === activeTab)?.error}
+            </div>
+          )}
           <section className="table-shell">
             <div className="table-head-meta mono">
               <span>{pad(activeItems.length, 4)} rows · {activeTab}</span>
