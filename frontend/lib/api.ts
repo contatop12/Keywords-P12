@@ -1,4 +1,4 @@
-import { DiscoveryResult, GeoSuggestionItem, SearchPayload, SearchResponse } from "./types";
+import { AgebriResult, BriefingData, DiscoveryResult, GeoSuggestionItem, SearchPayload, SearchResponse } from "./types";
 
 const DEFAULT_API_BASE_URL = process.env.NODE_ENV === "production" ? "" : "http://localhost:8011";
 
@@ -152,4 +152,40 @@ export async function downloadMultiStudyXlsx(study: MultiStudyResult): Promise<B
   });
   if (!response.ok) throw new Error("Erro ao gerar XLSX.");
   return response.blob();
+}
+
+export async function runAgebri(briefing: BriefingData): Promise<AgebriResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/google/agebri`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(briefing),
+    });
+  } catch {
+    throw new Error(`Nao foi possivel conectar ao backend em ${API_BASE_URL || "mesma origem"}.`);
+  }
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: "Erro ao consultar AGEBRI." }));
+    throw new Error(err?.detail ?? "Erro ao consultar AGEBRI.");
+  }
+  return (await response.json()) as AgebriResult;
+}
+
+export async function exportMultiStudyToSheets(study: MultiStudyResult): Promise<{ url: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/google/study/export-sheets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ study }),
+    });
+  } catch {
+    throw new Error(`Nao foi possivel conectar ao backend em ${API_BASE_URL || "mesma origem"}.`);
+  }
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: "Erro ao exportar para Google Sheets." }));
+    throw new Error(err?.detail ?? "Erro ao exportar para Google Sheets.");
+  }
+  return (await response.json()) as { url: string };
 }

@@ -6,11 +6,13 @@ import Link from "next/link";
 import {
   generateMultiStudy,
   downloadMultiStudyXlsx,
+  exportMultiStudyToSheets,
+  runAgebri,
   suggestGoogleLocations,
   MultiStudyResult,
   MultiTabSpec,
 } from "../../lib/api";
-import { GeoSuggestionItem } from "../../lib/types";
+import { AgebriResult, BriefingData, GeoSuggestionItem } from "../../lib/types";
 
 type GeoType = "country" | "state" | "city";
 
@@ -22,7 +24,6 @@ interface TabDraft {
 }
 
 const MAX_TABS = 30;
-const MAX_SEEDS_PER_TAB = 10;
 
 const GEO_TYPE_LABELS: Record<GeoType, string> = {
   country: "País",
@@ -61,7 +62,25 @@ const DEFAULT_TABS: TabDraft[] = [
   { id: makeId(), name: "Geral", seedsInput: "", seeds: [] },
 ];
 
+const DEFAULT_BRIEFING: BriefingData = {
+  company_name: "",
+  niche: "",
+  description: "",
+  services: "",
+  target_audience: "",
+  main_objective: "",
+  competitors: "",
+  observations: "",
+  urls: [""],
+  restrict_keywords: "",
+};
+
 export default function MultiStudyPage() {
+  const [briefing, setBriefing] = useState<BriefingData>(DEFAULT_BRIEFING);
+  const [agebriResult, setAgebriResult] = useState<AgebriResult | null>(null);
+  const [agebriLoading, setAgebriLoading] = useState(false);
+  const [agebriError, setAgebriError] = useState<string | null>(null);
+
   const [tabs, setTabs] = useState<TabDraft[]>(DEFAULT_TABS);
   const [country, setCountry] = useState("BR");
   const [limit, setLimit] = useState(2000);
@@ -77,6 +96,7 @@ export default function MultiStudyPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [sheetsLoading, setSheetsLoading] = useState(false);
 
   useEffect(() => {
     if (!geoInput.trim()) {
@@ -106,6 +126,48 @@ export default function MultiStudyPage() {
     };
   }, [geoInput, country, geoType]);
 
+  function updateBriefing<K extends keyof BriefingData>(key: K, value: BriefingData[K]) {
+    setBriefing((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function addUrl() {
+    setBriefing((prev) => ({ ...prev, urls: [...prev.urls, ""] }));
+  }
+
+  function updateUrl(idx: number, value: string) {
+    setBriefing((prev) => {
+      const next = [...prev.urls];
+      next[idx] = value;
+      return { ...prev, urls: next };
+    });
+  }
+
+  function removeUrl(idx: number) {
+    setBriefing((prev) => ({ ...prev, urls: prev.urls.filter((_, i) => i !== idx) }));
+  }
+
+  async function onRunAgebri() {
+    setAgebriError(null);
+    setAgebriLoading(true);
+    try {
+      const res = await runAgebri(briefing);
+      setAgebriResult(res);
+    } catch (err) {
+      setAgebriError(err instanceof Error ? err.message : "Falha ao consultar AGEBRI.");
+    } finally {
+      setAgebriLoading(false);
+    }
+  }
+
+  function useAgebriCategoryAsTab(name: string, keywords: string[]) {
+    setTabs((prev) => {
+      const exists = prev.find((t) => t.name.toLowerCase() === name.toLowerCase());
+      if (exists) return prev;
+      if (prev.length >= MAX_TABS) return prev;
+      return [...prev, { id: makeId(), name, seedsInput: "", seeds: keywords.slice(0, 50) }];
+    });
+  }
+
   function addGeoChip(value: string, id?: string) {
     const chip = geoValue(geoType, value, id);
     if (!geoChips.includes(chip)) setGeoChips((prev) => [...prev, chip]);
@@ -130,7 +192,6 @@ export default function MultiStudyPage() {
         const merged = [...t.seeds];
         const seen = new Set(merged.map((s) => s.toLowerCase()));
         for (const s of parsed) {
-          if (merged.length >= MAX_SEEDS_PER_TAB) break;
           if (seen.has(s.toLowerCase())) continue;
           seen.add(s.toLowerCase());
           merged.push(s);
@@ -168,7 +229,6 @@ export default function MultiStudyPage() {
       const seedSet = new Set(t.seeds.map((s) => s.toLowerCase()));
       const merged = [...t.seeds];
       for (const s of pending) {
-        if (merged.length >= MAX_SEEDS_PER_TAB) break;
         if (seedSet.has(s.toLowerCase())) continue;
         seedSet.add(s.toLowerCase());
         merged.push(s);
@@ -223,6 +283,19 @@ export default function MultiStudyPage() {
       URL.revokeObjectURL(url);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao baixar XLSX.");
+    }
+  }
+
+  async function onExportSheets() {
+    if (!result) return;
+    setSheetsLoading(true);
+    try {
+      const { url } = await exportMultiStudyToSheets(result);
+      window.open(url, "_blank");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao exportar para Google Sheets.");
+    } finally {
+      setSheetsLoading(false);
     }
   }
 
@@ -292,6 +365,186 @@ export default function MultiStudyPage() {
         </div>
       </section>
 
+      {/* ── ETAPA 1: BRIEFING + AGEBRI ────────────────────────────────── */}
+      <div className="panel search search-google">
+        <span className="panel-label mono">
+          <span className="accent">●</span> agente IA · briefing do cliente
+        </span>
+
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
+          <label><span className="idx">01</span> Nome da empresa</label>
+          <input
+            value={briefing.company_name}
+            onChange={(e) => updateBriefing("company_name", e.target.value)}
+            placeholder="Clínica Estética Bella Forma"
+          />
+        </div>
+
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
+          <label><span className="idx">02</span> Sobre a empresa</label>
+          <textarea
+            rows={3}
+            value={briefing.description}
+            onChange={(e) => updateBriefing("description", e.target.value)}
+            placeholder="Clínica de estética facial e corporal em São Paulo (Zona Sul). Atendimento 100% particular, sem convênios. Foco em procedimentos minimamente invasivos com médicos especialistas."
+          />
+        </div>
+
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
+          <label><span className="idx">03</span> Especialidade / nicho</label>
+          <input
+            value={briefing.niche}
+            onChange={(e) => updateBriefing("niche", e.target.value)}
+            placeholder="Estética facial avançada — harmonização e rejuvenescimento"
+          />
+        </div>
+
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
+          <label><span className="idx">04</span> Principais serviços / produtos</label>
+          <textarea
+            rows={3}
+            value={briefing.services}
+            onChange={(e) => updateBriefing("services", e.target.value)}
+            placeholder="Botox e toxina botulínica, preenchimento labial com ácido hialurônico, bioestimuladores de colágeno, harmonização facial, peeling químico, limpeza de pele profunda, fios de PDO."
+          />
+        </div>
+
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
+          <label><span className="idx">05</span> Público-alvo</label>
+          <input
+            value={briefing.target_audience}
+            onChange={(e) => updateBriefing("target_audience", e.target.value)}
+            placeholder="Mulheres 30–55 anos, classe B/C, São Paulo capital e Grande SP"
+          />
+        </div>
+
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
+          <label><span className="idx">06</span> Objetivo principal</label>
+          <input
+            value={briefing.main_objective}
+            onChange={(e) => updateBriefing("main_objective", e.target.value)}
+            placeholder="Aumentar agendamentos de botox e harmonização facial via Google Ads"
+          />
+        </div>
+
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
+          <label><span className="idx">07</span> Concorrentes</label>
+          <textarea
+            rows={2}
+            value={briefing.competitors}
+            onChange={(e) => updateBriefing("competitors", e.target.value)}
+            placeholder="Clínica Visage (Vila Olímpia), Instituto Bela (Moema), Dr. Paulo Estética (Itaim)..."
+          />
+        </div>
+
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
+          <label><span className="idx">08</span> Observações livres</label>
+          <textarea
+            rows={3}
+            value={briefing.observations}
+            onChange={(e) => updateBriefing("observations", e.target.value)}
+            placeholder="Atendemos somente com agendamento prévio. Não trabalhamos com convênios nem planos de saúde. Temos estacionamento próprio. Diferenciais: médicos CRM, ambiente discreto, sem filas."
+          />
+        </div>
+
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
+          <label><span className="idx">09</span> URL(s) para análise</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {briefing.urls.map((url, idx) => (
+              <div key={idx} style={{ display: "flex", gap: 8 }}>
+                <input
+                  value={url}
+                  onChange={(e) => updateUrl(idx, e.target.value)}
+                  placeholder="https://clinicabellaforma.com.br"
+                  style={{ flex: 1 }}
+                  type="url"
+                />
+                {briefing.urls.length > 1 && (
+                  <button type="button" className="btn-ghost mono" onClick={() => removeUrl(idx)}>×</button>
+                )}
+              </div>
+            ))}
+            <button type="button" className="btn-ghost mono" onClick={addUrl} style={{ alignSelf: "flex-start" }}>
+              + Adicionar URL
+            </button>
+          </div>
+        </div>
+
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
+          <label><span className="idx">10</span> Restringir / Negativar</label>
+          <textarea
+            rows={3}
+            value={briefing.restrict_keywords}
+            onChange={(e) => updateBriefing("restrict_keywords", e.target.value)}
+            placeholder="plano de saúde, convênio, SUS, gratuito, curso de estética, faculdade, emprego, vaga de emprego, salário, aparelho, manutenção, peças"
+          />
+        </div>
+
+        <div className="submit-wrap">
+          <button
+            type="button"
+            className={`btn-primary ${agebriLoading ? "is-loading" : ""}`}
+            disabled={agebriLoading}
+            onClick={onRunAgebri}
+          >
+            {agebriLoading ? "Consultando AGEBRI…" : "Gerar Palavras com AGEBRI"}
+          </button>
+        </div>
+
+        {agebriError && <div className="status error mono" style={{ gridColumn: "1 / -1" }}>{agebriError}</div>}
+      </div>
+
+      {/* ── RESULTADO AGEBRI ────────────────────────────────────────────── */}
+      {agebriResult && (
+        <div className="panel" style={{ marginTop: 0 }}>
+          <span className="panel-label mono">
+            <span className="accent">●</span> AGEBRI · resultado
+          </span>
+
+          {agebriResult.restrict_suggestions.length > 0 && (
+            <div style={{ gridColumn: "1 / -1", marginBottom: 8 }}>
+              <div className="geo-label mono" style={{ marginBottom: 6 }}>Sugestões para negativar</div>
+              <div className="geo-chips-row">
+                {agebriResult.restrict_suggestions.map((s) => (
+                  <span key={s} className="geo-chip mono">{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 14 }}>
+            {agebriResult.categories.map((cat) => (
+              <div
+                key={cat.name}
+                style={{
+                  border: "1px solid var(--border)",
+                  padding: 12,
+                  background: "var(--surface-2, transparent)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <span className="mono" style={{ fontWeight: 600, fontSize: 13 }}>{cat.name}</span>
+                  <button
+                    type="button"
+                    className="btn-ghost mono"
+                    style={{ fontSize: 11 }}
+                    onClick={() => useAgebriCategoryAsTab(cat.name, cat.keywords)}
+                  >
+                    Usar como aba →
+                  </button>
+                </div>
+                <div className="chips-box">
+                  {cat.keywords.map((kw) => (
+                    <span key={kw} className="chip-kw mono">{kw}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── ETAPA 2: ABAS DO ESTUDO ─────────────────────────────────────── */}
       <form className="panel search search-google" onSubmit={onSubmit}>
         <span className="panel-label mono">
           <span className="accent">●</span> abas do estudo
@@ -315,7 +568,7 @@ export default function MultiStudyPage() {
                   <input
                     value={tab.name}
                     onChange={(e) => updateTab(tab.id, { name: e.target.value })}
-                    placeholder="Nome da aba (ex: Teste Genético)"
+                    placeholder="Nome da aba (ex: Botox · Toxina Botulínica)"
                     style={{ flex: 1 }}
                     maxLength={31}
                   />
@@ -347,16 +600,11 @@ export default function MultiStudyPage() {
                       }
                     }}
                     onBlur={() => commitSeedsFromInput(tab.id)}
-                    placeholder={
-                      tab.seeds.length >= MAX_SEEDS_PER_TAB
-                        ? `Limite de ${MAX_SEEDS_PER_TAB} seeds atingido`
-                        : "Seeds (Enter ou vírgula para adicionar)…"
-                    }
-                    disabled={tab.seeds.length >= MAX_SEEDS_PER_TAB}
+                    placeholder="Seeds (Enter ou vírgula para adicionar)…"
                   />
                 </div>
                 <div className="chip-counter mono">
-                  {pad(tab.seeds.length, 2)} / {MAX_SEEDS_PER_TAB} seeds
+                  {pad(tab.seeds.length, 2)} seeds
                 </div>
               </div>
             ))}
@@ -482,9 +730,19 @@ export default function MultiStudyPage() {
         <>
           <div className="study-header">
             <h2 className="study-title display">Estudo Multi-Aba</h2>
-            <button type="button" className="btn-download" onClick={onDownload}>
-              Baixar XLSX
-            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" className="btn-download" onClick={onDownload}>
+                Baixar XLSX
+              </button>
+              <button
+                type="button"
+                className="btn-download"
+                onClick={onExportSheets}
+                disabled={sheetsLoading}
+              >
+                {sheetsLoading ? "Exportando…" : "Exportar Google Sheets"}
+              </button>
+            </div>
           </div>
           <div className="study-tabs">
             {result.tabs.map((tab) => (

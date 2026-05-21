@@ -20,9 +20,15 @@ class Settings(BaseSettings):
     request_timeout_seconds: int = 20
     relevance_filter_enabled: bool = True
     relevance_threshold: float = 0.38
-    google_ads_client_id: str = ""
-    google_ads_client_secret: str = ""
-    google_ads_refresh_token: str = ""
+    google_ads_client_id: str = Field(
+        default="", validation_alias=AliasChoices("GOOGLE_ADS_CLIENT_ID", "GOOGLE_CLIENT_ID")
+    )
+    google_ads_client_secret: str = Field(
+        default="", validation_alias=AliasChoices("GOOGLE_ADS_CLIENT_SECRET", "GOOGLE_CLIENT_SECRET")
+    )
+    google_ads_refresh_token: str = Field(
+        default="", validation_alias=AliasChoices("GOOGLE_ADS_REFRESH_TOKEN", "GOOGLE_REFRESH_TOKEN")
+    )
     google_ads_redirect_uri: str = "http://localhost:8080/callback"
     google_ads_api_version: str = "v20"
     google_ads_developer_token: str = ""
@@ -35,6 +41,8 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_model: str = "google/gemini-flash-1.5"
+
+    google_sheets_template_id: str = "1pGKcVyFiWWvslaPMsmcwkTWI4AS4LdRGi4vVSRS-vAY"
 
     cors_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,"

@@ -65,3 +65,26 @@ export type StudyMeta = {
   country: string;
   name: string | null;
 };
+
+export type AgebriCategory = {
+  name: string;
+  keywords: string[];
+};
+
+export type AgebriResult = {
+  categories: AgebriCategory[];
+  restrict_suggestions: string[];
+};
+
+export type BriefingData = {
+  company_name: string;
+  niche: string;
+  description: string;
+  services: string;
+  target_audience: string;
+  main_objective: string;
+  competitors: string;
+  observations: string;
+  urls: string[];
+  restrict_keywords: string;
+};

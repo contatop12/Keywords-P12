@@ -5,6 +5,8 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from backend.services import export_service, multi_study_service, study_service
+from backend.services.agebri_service import run_agebri
+from backend.services.sheets_export_service import write_study_to_sheets
 
 logger = logging.getLogger(__name__)
 
@@ -103,3 +105,51 @@ def export_study(study: dict) -> Response:
 @router.post("/discovery/export")
 def export_discovery(study: dict) -> Response:
     return _export_xlsx(study)
+
+
+class AgebriRequest(BaseModel):
+    company_name: str = ""
+    niche: str = ""
+    description: str = ""
+    services: str = ""
+    target_audience: str = ""
+    main_objective: str = ""
+    competitors: str = ""
+    observations: str = ""
+    urls: list[str] = Field(default_factory=list)
+    restrict_keywords: str = ""
+
+
+@router.post("/agebri")
+def agebri_endpoint(payload: AgebriRequest) -> dict:
+    try:
+        result = run_agebri(payload.model_dump())
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Erro no AGEBRI")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return {
+        "categories": [
+            {"name": c.name, "keywords": c.keywords}
+            for c in result.categories
+        ],
+        "restrict_suggestions": result.restrict_suggestions,
+    }
+
+
+class SheetsExportRequest(BaseModel):
+    study: dict
+
+
+@router.post("/study/export-sheets")
+def export_study_sheets(payload: SheetsExportRequest) -> dict:
+    try:
+        url = write_study_to_sheets(payload.study)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Erro ao exportar para Google Sheets")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {"url": url}

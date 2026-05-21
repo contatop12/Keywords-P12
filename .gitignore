@@ -23,3 +23,5 @@ frontend/cloudflare-env.d.ts
 
 # Local tooling
 .claude/
+.cursor/
+

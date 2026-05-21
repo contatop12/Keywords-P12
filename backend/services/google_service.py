@@ -407,7 +407,24 @@ class GoogleKeywordService:
         high_bid = self._to_int(metrics.get("highTopOfPageBidMicros"))
         close_variants = item.get("closeVariants", []) or []
         monthly_searches = self._extract_monthly_searches(metrics)
-        change_3m, change_yoy = self._calc_changes(monthly_searches)
+        raw_3m = metrics.get("threeMonthChangeInSearches")
+        raw_yoy = metrics.get("twelveMonthChangeInSearches")
+        if raw_3m is not None:
+            try:
+                pct = float(raw_3m) * 100
+                change_3m = f"{pct:+.0f}%"
+            except (TypeError, ValueError):
+                change_3m, _ = self._calc_changes(monthly_searches)
+        else:
+            change_3m, _ = self._calc_changes(monthly_searches)
+        if raw_yoy is not None:
+            try:
+                pct = float(raw_yoy) * 100
+                change_yoy = f"{pct:+.0f}%"
+            except (TypeError, ValueError):
+                _, change_yoy = self._calc_changes(monthly_searches)
+        else:
+            _, change_yoy = self._calc_changes(monthly_searches)
         concept_name, concept_group = self._extract_concept(item)
 
         path: list[str] = []
