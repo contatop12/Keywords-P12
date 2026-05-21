@@ -7,14 +7,13 @@ import {
   generateMultiStudy,
   downloadMultiStudyXlsx,
   exportMultiStudyToSheets,
-  runAgebri,
   planKeywords,
   suggestGoogleLocations,
   MultiStudyResult,
   MultiTabSpec,
   PlanResult,
 } from "../../lib/api";
-import { AgebriResult, BriefingData, GeoSuggestionItem } from "../../lib/types";
+import { GeoSuggestionItem } from "../../lib/types";
 
 type GeoType = "country" | "state" | "city";
 
@@ -64,25 +63,7 @@ const DEFAULT_TABS: TabDraft[] = [
   { id: makeId(), name: "Geral", seedsInput: "", seeds: [] },
 ];
 
-const DEFAULT_BRIEFING: BriefingData = {
-  company_name: "",
-  niche: "",
-  description: "",
-  services: "",
-  target_audience: "",
-  main_objective: "",
-  competitors: "",
-  observations: "",
-  urls: [""],
-  restrict_keywords: "",
-};
-
 export default function MultiStudyPage() {
-  const [briefing, setBriefing] = useState<BriefingData>(DEFAULT_BRIEFING);
-  const [agebriResult, setAgebriResult] = useState<AgebriResult | null>(null);
-  const [agebriLoading, setAgebriLoading] = useState(false);
-  const [agebriError, setAgebriError] = useState<string | null>(null);
-
   const [tabs, setTabs] = useState<TabDraft[]>(DEFAULT_TABS);
   const [country, setCountry] = useState("BR");
   const [limit, setLimit] = useState(2000);
@@ -222,48 +203,6 @@ export default function MultiStudyPage() {
       clearTimeout(timer);
     };
   }, [geoInput, country, geoType]);
-
-  function updateBriefing<K extends keyof BriefingData>(key: K, value: BriefingData[K]) {
-    setBriefing((prev) => ({ ...prev, [key]: value }));
-  }
-
-  function addUrl() {
-    setBriefing((prev) => ({ ...prev, urls: [...prev.urls, ""] }));
-  }
-
-  function updateUrl(idx: number, value: string) {
-    setBriefing((prev) => {
-      const next = [...prev.urls];
-      next[idx] = value;
-      return { ...prev, urls: next };
-    });
-  }
-
-  function removeUrl(idx: number) {
-    setBriefing((prev) => ({ ...prev, urls: prev.urls.filter((_, i) => i !== idx) }));
-  }
-
-  async function onRunAgebri() {
-    setAgebriError(null);
-    setAgebriLoading(true);
-    try {
-      const res = await runAgebri(briefing);
-      setAgebriResult(res);
-    } catch (err) {
-      setAgebriError(err instanceof Error ? err.message : "Falha ao consultar AGEBRI.");
-    } finally {
-      setAgebriLoading(false);
-    }
-  }
-
-  function useAgebriCategoryAsTab(name: string, keywords: string[]) {
-    setTabs((prev) => {
-      const exists = prev.find((t) => t.name.toLowerCase() === name.toLowerCase());
-      if (exists) return prev;
-      if (prev.length >= MAX_TABS) return prev;
-      return [...prev, { id: makeId(), name, seedsInput: "", seeds: keywords.slice(0, 50) }];
-    });
-  }
 
   function addGeoChip(value: string, id?: string) {
     const chip = geoValue(geoType, value, id);
@@ -462,187 +401,8 @@ export default function MultiStudyPage() {
         </div>
       </section>
 
-      {/* ── ETAPA 1: BRIEFING + AGEBRI ────────────────────────────────── */}
+      {/* ── BRIEFING · AGENTE IA ────────────────────────────────────────── */}
       <div className="panel search search-google">
-        <span className="panel-label mono">
-          <span className="accent">●</span> AGEBRI · análise de briefing
-        </span>
-
-        <div className="field" style={{ gridColumn: "1 / -1" }}>
-          <label><span className="idx">01</span> Nome da empresa</label>
-          <input
-            value={briefing.company_name}
-            onChange={(e) => updateBriefing("company_name", e.target.value)}
-            placeholder="Clínica Estética Bella Forma"
-          />
-        </div>
-
-        <div className="field" style={{ gridColumn: "1 / -1" }}>
-          <label><span className="idx">02</span> Sobre a empresa</label>
-          <textarea
-            rows={3}
-            value={briefing.description}
-            onChange={(e) => updateBriefing("description", e.target.value)}
-            placeholder="Clínica de estética facial e corporal em São Paulo (Zona Sul). Atendimento 100% particular, sem convênios. Foco em procedimentos minimamente invasivos com médicos especialistas."
-          />
-        </div>
-
-        <div className="field" style={{ gridColumn: "1 / -1" }}>
-          <label><span className="idx">03</span> Especialidade / nicho</label>
-          <input
-            value={briefing.niche}
-            onChange={(e) => updateBriefing("niche", e.target.value)}
-            placeholder="Estética facial avançada — harmonização e rejuvenescimento"
-          />
-        </div>
-
-        <div className="field" style={{ gridColumn: "1 / -1" }}>
-          <label><span className="idx">04</span> Principais serviços / produtos</label>
-          <textarea
-            rows={3}
-            value={briefing.services}
-            onChange={(e) => updateBriefing("services", e.target.value)}
-            placeholder="Botox e toxina botulínica, preenchimento labial com ácido hialurônico, bioestimuladores de colágeno, harmonização facial, peeling químico, limpeza de pele profunda, fios de PDO."
-          />
-        </div>
-
-        <div className="field" style={{ gridColumn: "1 / -1" }}>
-          <label><span className="idx">05</span> Público-alvo</label>
-          <input
-            value={briefing.target_audience}
-            onChange={(e) => updateBriefing("target_audience", e.target.value)}
-            placeholder="Mulheres 30–55 anos, classe B/C, São Paulo capital e Grande SP"
-          />
-        </div>
-
-        <div className="field" style={{ gridColumn: "1 / -1" }}>
-          <label><span className="idx">06</span> Objetivo principal</label>
-          <input
-            value={briefing.main_objective}
-            onChange={(e) => updateBriefing("main_objective", e.target.value)}
-            placeholder="Aumentar agendamentos de botox e harmonização facial via Google Ads"
-          />
-        </div>
-
-        <div className="field" style={{ gridColumn: "1 / -1" }}>
-          <label><span className="idx">07</span> Concorrentes</label>
-          <textarea
-            rows={2}
-            value={briefing.competitors}
-            onChange={(e) => updateBriefing("competitors", e.target.value)}
-            placeholder="Clínica Visage (Vila Olímpia), Instituto Bela (Moema), Dr. Paulo Estética (Itaim)..."
-          />
-        </div>
-
-        <div className="field" style={{ gridColumn: "1 / -1" }}>
-          <label><span className="idx">08</span> Observações livres</label>
-          <textarea
-            rows={3}
-            value={briefing.observations}
-            onChange={(e) => updateBriefing("observations", e.target.value)}
-            placeholder="Atendemos somente com agendamento prévio. Não trabalhamos com convênios nem planos de saúde. Temos estacionamento próprio. Diferenciais: médicos CRM, ambiente discreto, sem filas."
-          />
-        </div>
-
-        <div className="field" style={{ gridColumn: "1 / -1" }}>
-          <label><span className="idx">09</span> URL(s) para análise</label>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {briefing.urls.map((url, idx) => (
-              <div key={idx} style={{ display: "flex", gap: 8 }}>
-                <input
-                  value={url}
-                  onChange={(e) => updateUrl(idx, e.target.value)}
-                  placeholder="https://clinicabellaforma.com.br"
-                  style={{ flex: 1 }}
-                  type="url"
-                />
-                {briefing.urls.length > 1 && (
-                  <button type="button" className="btn-ghost mono" onClick={() => removeUrl(idx)}>×</button>
-                )}
-              </div>
-            ))}
-            <button type="button" className="btn-ghost mono" onClick={addUrl} style={{ alignSelf: "flex-start" }}>
-              + Adicionar URL
-            </button>
-          </div>
-        </div>
-
-        <div className="field" style={{ gridColumn: "1 / -1" }}>
-          <label><span className="idx">10</span> Restringir / Negativar</label>
-          <textarea
-            rows={3}
-            value={briefing.restrict_keywords}
-            onChange={(e) => updateBriefing("restrict_keywords", e.target.value)}
-            placeholder="plano de saúde, convênio, SUS, gratuito, curso de estética, faculdade, emprego, vaga de emprego, salário, aparelho, manutenção, peças"
-          />
-        </div>
-
-        <div className="submit-wrap">
-          <button
-            type="button"
-            className={`btn-primary ${agebriLoading ? "is-loading" : ""}`}
-            disabled={agebriLoading}
-            onClick={onRunAgebri}
-          >
-            {agebriLoading ? "Consultando AGEBRI…" : "Gerar Palavras com AGEBRI"}
-          </button>
-        </div>
-
-        {agebriError && <div className="status error mono" style={{ gridColumn: "1 / -1" }}>{agebriError}</div>}
-      </div>
-
-      {/* ── RESULTADO AGEBRI ────────────────────────────────────────────── */}
-      {agebriResult && (
-        <div className="panel" style={{ marginTop: 32 }}>
-          <span className="panel-label mono">
-            <span className="accent">●</span> AGEBRI · resultado
-          </span>
-
-          {agebriResult.restrict_suggestions.length > 0 && (
-            <div style={{ gridColumn: "1 / -1", marginBottom: 8 }}>
-              <div className="geo-label mono" style={{ marginBottom: 6 }}>Sugestões para negativar</div>
-              <div className="geo-chips-row">
-                {agebriResult.restrict_suggestions.map((s) => (
-                  <span key={s} className="geo-chip mono">{s}</span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 14 }}>
-            {agebriResult.categories.map((cat) => (
-              <div
-                key={cat.name}
-                style={{
-                  border: "1px solid var(--border)",
-                  padding: 12,
-                  background: "var(--surface-2, transparent)",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <span className="mono" style={{ fontWeight: 600, fontSize: 13 }}>{cat.name}</span>
-                  <button
-                    type="button"
-                    className="btn-ghost mono"
-                    style={{ fontSize: 11 }}
-                    onClick={() => useAgebriCategoryAsTab(cat.name, cat.keywords)}
-                  >
-                    Usar como aba →
-                  </button>
-                </div>
-                <div className="chips-box">
-                  {cat.keywords.map((kw) => (
-                    <span key={kw} className="chip-kw mono">{kw}</span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── ETAPA 2: KEYWORD PLANNER AGENT ─────────────────────────────── */}
-      <div className="panel search search-google" style={{ marginTop: 32 }}>
         <span className="panel-label mono">
           <span className="accent">●</span> agente IA · keyword clusters
         </span>
