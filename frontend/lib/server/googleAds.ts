@@ -307,12 +307,18 @@ export async function googleKeywordSearchWithVariants(params: {
     new Set(params.keywords.map((k) => k.trim()).filter(Boolean).map((k) => k.toLowerCase()))
   ).slice(0, 50);
 
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
   const output: SearchResultItem[] = [];
   const closeVariants: string[] = [];
   let pageToken: string | undefined;
   let remaining = Math.max(params.limit, 1);
+  let pageIndex = 0;
 
   while (remaining > 0) {
+    if (pageIndex > 0) await sleep(5000);
+    pageIndex++;
+
     const pageSize = Math.min(remaining, 10_000);
     const body: Record<string, unknown> = {
       language: `languageConstants/${config.defaultLanguageId}`,
@@ -326,16 +332,21 @@ export async function googleKeywordSearchWithVariants(params: {
       body.pageToken = pageToken;
     }
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: adsHeaders(config, token),
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
+    let response: Response | undefined;
+    for (let attempt = 0; attempt <= 3; attempt++) {
+      if (attempt > 0) await sleep(7000);
+      const r = await fetch(endpoint, {
+        method: "POST",
+        headers: adsHeaders(config, token),
+        body: JSON.stringify(body),
+      });
+      if (r.ok) { response = r; break; }
+      const text = await r.text();
+      const isRateLimit = r.status === 429 || text.includes("RESOURCE_EXHAUSTED");
+      if (isRateLimit && attempt < 3) continue;
       throw new Error(`Google Ads retornou erro na busca: ${text}`);
     }
+    if (!response) throw new Error("Falha após múltiplas tentativas na busca.");
 
     const data = (await response.json()) as {
       results?: Array<{

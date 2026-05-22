@@ -38,36 +38,41 @@ export async function POST(req: Request) {
 
     const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-    const tabResults = await Promise.all(
-      tabs.map(async (tab, index) => {
-        const name = (tab.name ?? `Aba ${index + 1}`).trim();
-        const seeds = (tab.seeds ?? []).map((s) => s.trim()).filter(Boolean);
-        if (!seeds.length) {
-          return { name, seeds: [], items: [], error: "Sem seeds válidas." };
-        }
-        const locations = tab.locations?.length ? tab.locations : defLocations;
-        const country = (tab.country ?? defCountry).toUpperCase();
-        const limit = Math.max(1, Number(tab.limit ?? defLimit));
+    const tabResults: Array<{ name: string; seeds: string[]; items: unknown[]; error?: string }> = [];
 
-        if (index > 0) await delay(index * 2000);
+    for (let index = 0; index < tabs.length; index++) {
+      if (index > 0) await delay(5000);
 
-        for (let attempt = 0; attempt <= 2; attempt++) {
-          try {
-            const items = await googleKeywordSearch({ readEnv, keywords: seeds, country, limit, locations });
-            return { name, seeds, items };
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : "Erro desconhecido.";
-            const isRateLimit = msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429");
-            if (isRateLimit && attempt < 2) {
-              await delay(7000);
-              continue;
-            }
-            return { name, seeds, items: [], error: msg };
-          }
+      const tab = tabs[index];
+      const name = (tab.name ?? `Aba ${index + 1}`).trim();
+      const seeds = (tab.seeds ?? []).map((s) => s.trim()).filter(Boolean);
+      if (!seeds.length) {
+        tabResults.push({ name, seeds: [], items: [], error: "Sem seeds válidas." });
+        continue;
+      }
+      const locations = tab.locations?.length ? tab.locations : defLocations;
+      const country = (tab.country ?? defCountry).toUpperCase();
+      const limit = Math.max(1, Number(tab.limit ?? defLimit));
+
+      let pushed = false;
+      for (let attempt = 0; attempt <= 3; attempt++) {
+        if (attempt > 0) await delay(7000);
+        try {
+          const items = await googleKeywordSearch({ readEnv, keywords: seeds, country, limit, locations });
+          tabResults.push({ name, seeds, items });
+          pushed = true;
+          break;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Erro desconhecido.";
+          const isRateLimit = msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429");
+          if (isRateLimit && attempt < 3) continue;
+          tabResults.push({ name, seeds, items: [], error: msg });
+          pushed = true;
+          break;
         }
-        return { name, seeds, items: [], error: "Max retries atingido." };
-      })
-    );
+      }
+      if (!pushed) tabResults.push({ name, seeds, items: [], error: "Max retries atingido." });
+    }
 
     return Response.json({
       id: crypto.randomUUID(),
