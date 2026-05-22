@@ -1262,6 +1262,38 @@ td.name { font-weight: 500; min-width: 200px; }
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ── Button secondary ─────────────────────────────────────── */
+.btn-secondary {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: all 0.2s var(--ease);
+  border-radius: var(--radius);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, 0.4);
+  color: var(--signal-err);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 /* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 1000px) {
   .shell { padding: 0 20px 64px; }
@@ -1271,12 +1303,133 @@ td.name { font-weight: 500; min-width: 200px; }
   .note { text-align: left; }
 }
 
+@media (max-width: 768px) {
+  /* Prevent iOS input zoom on focus */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Topbar — don't stack yet, just tighten */
+  .topbar { padding: 16px 0; margin-bottom: 36px; }
+  .topbar-meta { gap: 14px; font-size: 10px; }
+
+  /* Study result tabs — horizontal scroll, no wrap */
+  .study-tabs {
+    overflow-x: auto;
+    overflow-y: visible;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+    margin-bottom: 14px;
+  }
+  .study-tabs::-webkit-scrollbar { display: none; }
+  .study-tab { white-space: nowrap; flex-shrink: 0; }
+
+  /* Study header — title + export buttons stack */
+  .study-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    margin-top: 24px;
+  }
+  .study-header > div {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .study-header .btn-download {
+    flex: 1 1 auto;
+    min-width: 140px;
+    justify-content: center;
+  }
+
+  /* Table head — stack count + actions */
+  .table-head-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 16px;
+  }
+  .table-head-actions { flex-wrap: wrap; gap: 6px; }
+
+  /* Table compact */
+  th { padding: 10px 12px; font-size: 9px; }
+  td { padding: 10px 12px; font-size: 12px; }
+
+  /* Minimum touch targets */
+  .btn-primary, .btn-secondary, .btn-download, .btn-ghost {
+    min-height: 44px;
+  }
+  .study-tab, .tab { min-height: 44px; }
+  .mode-btn, .geo-type-btn { min-height: 40px; padding: 10px 14px; }
+  .geo-chip button { min-width: 24px; min-height: 24px; }
+}
+
 @media (max-width: 640px) {
   .shell { padding: 0 16px 48px; }
-  .topbar { flex-direction: column; align-items: flex-start; gap: 14px; }
+
+  /* Topbar — stack on narrow */
+  .topbar { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .topbar-meta { flex-wrap: wrap; gap: 10px; }
+  .brand { font-size: 11px; }
+
   .search, .search-google { grid-template-columns: 1fr; }
-  .hero-stats { grid-template-columns: 1fr 1fr; }
+  .hero-stats { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .hero-stat { padding: 14px 16px; }
+  .hero-stat-value { font-size: 18px; }
+  .hero-sub { font-size: 13px; }
+
   .ribbon { flex-direction: column; align-items: flex-start; gap: 10px; }
   .adgroup-grid { grid-template-columns: 1fr; }
   .studies-grid { grid-template-columns: 1fr; }
+
+  /* Status wrapping */
+  .status { flex-wrap: wrap; gap: 8px; font-size: 12px; }
+
+  /* Footer stack */
+  .foot { flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 40px; }
+
+  /* Panel bleed to screen edges on mobile */
+  .panel {
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+    margin-left: -16px;
+    margin-right: -16px;
+  }
+  .panel-label { left: 14px; }
+
+  /* Form fields tighter on mobile */
+  .field { padding: 16px 16px; }
+
+  /* Geo input full width */
+  .geo-input-row input { max-width: 100%; }
+
+  /* Chip input smaller placeholder */
+  .chips-box input { min-width: 100px; font-size: 14px !important; }
+
+  /* Crumb compact */
+  .crumb { font-size: 10px; gap: 6px; letter-spacing: 0.12em; }
+
+  /* Hero section */
+  .hero { padding: 24px 0 32px; margin-bottom: 20px; }
+}
+
+@media (max-width: 420px) {
+  /* Very small phones */
+  .topbar-meta .brand-divider { display: none; }
+  .hero-stats { grid-template-columns: 1fr 1fr; }
+  .study-title { font-size: 1.3rem; }
+
+  /* Geo chips wrap cleanly */
+  .geo-chips-row { gap: 5px; }
+  .geo-chip { font-size: 11px; padding: 3px 8px 3px 10px; }
+
+  /* Tab name input + remove button stack */
+  .tab-row-inner { flex-wrap: wrap; }
+
+  th { padding: 8px 10px; font-size: 8px; letter-spacing: 0.1em; }
+  td { padding: 8px 10px; font-size: 11px; }
 }
