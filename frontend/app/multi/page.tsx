@@ -10,6 +10,7 @@ import {
   planKeywords,
   suggestGoogleLocations,
   MultiStudyResult,
+  MultiTabResult,
   MultiTabSpec,
   PlanResult,
 } from "../../lib/api";
