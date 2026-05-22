@@ -16,5 +16,11 @@
       "binding": "WORKER_SELF_REFERENCE",
       "service": "keywords-p12"
     }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "STUDIES_KV",
+      "id": "0ac10be016ec4be29bee244a8d7cea2c"
+    }
   ]
 }

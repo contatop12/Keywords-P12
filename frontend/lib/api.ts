@@ -215,6 +215,52 @@ export async function runAgebri(briefing: BriefingData): Promise<AgebriResult> {
   return (await response.json()) as AgebriResult;
 }
 
+// ── Study history (Cloudflare KV) ──────────────────────────────────────────
+
+export interface StudyIndexEntry {
+  id: string;
+  created_at: string;
+  client_name: string;
+  brief_preview: string;
+  tab_count: number;
+  keyword_count: number;
+}
+
+export interface StoredStudy extends MultiStudyResult {
+  client_name: string;
+  brief_preview: string;
+  brief: PlanBriefPayload;
+}
+
+export async function saveStudy(
+  study: MultiStudyResult,
+  clientName: string,
+  briefPreview: string,
+  brief: PlanBriefPayload
+): Promise<void> {
+  await fetch("/api/studies", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ study, client_name: clientName, brief_preview: briefPreview, brief }),
+  });
+}
+
+export async function listStudies(): Promise<StudyIndexEntry[]> {
+  const res = await fetch("/api/studies");
+  if (!res.ok) return [];
+  return (await res.json()) as StudyIndexEntry[];
+}
+
+export async function getStudy(id: string): Promise<StoredStudy | null> {
+  const res = await fetch(`/api/studies/${id}`);
+  if (!res.ok) return null;
+  return (await res.json()) as StoredStudy;
+}
+
+export async function deleteStudy(id: string): Promise<void> {
+  await fetch(`/api/studies/${id}`, { method: "DELETE" });
+}
+
 export async function exportMultiStudyToSheets(study: MultiStudyResult): Promise<{ url: string }> {
   let response: Response;
   try {

@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 import {
   generateMultiStudy,
@@ -9,6 +10,8 @@ import {
   exportMultiStudyToSheets,
   planKeywords,
   suggestGoogleLocations,
+  saveStudy,
+  getStudy,
   MultiStudyResult,
   MultiTabResult,
   MultiTabSpec,
@@ -65,6 +68,8 @@ const DEFAULT_TABS: TabDraft[] = [
 ];
 
 export default function MultiStudyPage() {
+  const searchParams = useSearchParams();
+
   const [tabs, setTabs] = useState<TabDraft[]>(DEFAULT_TABS);
   const [country, setCountry] = useState("BR");
   const [limit, setLimit] = useState(2000);
@@ -101,6 +106,44 @@ export default function MultiStudyPage() {
   const [planEstrategia, setPlanEstrategia] = useState<string>("");
   const [briefOpen, setBriefOpen] = useState(true);
   const planProgressRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Load study from history (?load=id)
+  useEffect(() => {
+    const loadId = searchParams.get("load");
+    if (!loadId) return;
+    setStatus("Carregando estudo do histórico…");
+    getStudy(loadId).then((stored) => {
+      if (!stored) { setStatus(null); setError("Estudo não encontrado."); return; }
+      setTabs(
+        stored.tabs.map((t) => ({
+          id: makeId(),
+          name: t.name,
+          seedsInput: "",
+          seeds: t.seeds ?? [],
+        }))
+      );
+      if (stored.default_locations?.length) setGeoChips(stored.default_locations);
+      if (stored.country) setCountry(stored.country);
+      if (stored.brief) {
+        setBrief({
+          cliente: stored.brief.cliente ?? "",
+          especialidade: stored.brief.especialidade ?? "",
+          urls: stored.brief.urls?.length ? stored.brief.urls : [""],
+          localizacao: stored.brief.localizacao ?? "",
+          objetivo: stored.brief.objetivo ?? "",
+          servicosInput: "",
+          servicos: stored.brief.servicos ?? [],
+          concorrentesInput: "",
+          concorrentes: stored.brief.concorrentes ?? [],
+          observacoes: stored.brief.observacoes ?? "",
+          negativar: stored.brief.negativar ?? "",
+        });
+      }
+      setStatus(`Estudo "${stored.client_name}" carregado. Edite as seeds e gere novo estudo.`);
+      setBriefOpen(false);
+    }).catch(() => { setStatus(null); setError("Erro ao carregar estudo."); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function commitBriefList(field: "servicos" | "concorrentes") {
     setBrief((prev) => {
@@ -340,6 +383,27 @@ export default function MultiStudyPage() {
 
       const total = allTabResults.reduce((acc, t) => acc + t.items.length, 0);
       setStatus(`${allTabResults.length} abas geradas. Total keywords: ${total}.`);
+
+      if (studyMeta) {
+        const finalStudy = { ...studyMeta, tabs: allTabResults };
+        const briefPreview = [brief.especialidade, brief.localizacao].filter(Boolean).join(" · ");
+        saveStudy(
+          finalStudy,
+          brief.cliente || "Cliente",
+          briefPreview,
+          {
+            cliente: brief.cliente,
+            especialidade: brief.especialidade,
+            urls: brief.urls.filter(Boolean),
+            localizacao: brief.localizacao,
+            objetivo: brief.objetivo,
+            servicos: brief.servicos,
+            concorrentes: brief.concorrentes,
+            observacoes: brief.observacoes,
+            negativar: brief.negativar,
+          }
+        ).catch(() => {/* save failure is silent */});
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao gerar estudo.");
       if (studyMeta && allTabResults.length > 0) {
@@ -400,6 +464,8 @@ export default function MultiStudyPage() {
           <Link href="/" style={{ color: "var(--text-dim)" }}>← Voltar</Link>
           <span className="brand-divider">·</span>
           <span>multi-aba</span>
+          <span className="brand-divider">·</span>
+          <Link href="/history" style={{ color: "var(--accent)" }}>histórico</Link>
         </div>
       </header>
 
