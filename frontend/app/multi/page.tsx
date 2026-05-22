@@ -276,6 +276,7 @@ export default function MultiStudyPage() {
     e.preventDefault();
     setError(null);
     setStatus(null);
+    setSheetsUrl(null);
 
     const finalTabs = tabs.map((t) => {
       const pending = splitSeeds(t.seedsInput);
@@ -297,26 +298,52 @@ export default function MultiStudyPage() {
 
     setLoading(true);
     setResult(null);
-    setStatus(`Rodando ${validTabs.length} abas em paralelo…`);
+    setActiveTab(null);
+
+    type StudyMeta = { id: string; created_at: string; country: string; default_locations: string[] };
+    let studyMeta: StudyMeta | null = null;
+    const allTabResults: MultiTabResult[] = [];
 
     try {
-      const payload: { tabs: MultiTabSpec[]; locations: string[]; country: string; limit: number } = {
-        tabs: validTabs,
-        locations: geoChips,
-        country,
-        limit,
-      };
-      const data = await generateMultiStudy(payload);
-      setResult(data);
-      setActiveTab(data.tabs[0]?.name ?? null);
-      setStatus(
-        `${data.tabs.length} abas geradas. Total keywords: ${data.tabs.reduce(
-          (acc, t) => acc + t.items.length,
-          0
-        )}.`
-      );
+      for (let i = 0; i < validTabs.length; i++) {
+        // Countdown between tabs — Google Ads API rate limit
+        if (i > 0) {
+          for (let s = 5; s > 0; s--) {
+            setStatus(`Aba ${i + 1} de ${validTabs.length} — aguardando ${s}s…`);
+            await new Promise<void>((r) => setTimeout(r, 1000));
+          }
+        }
+        setStatus(`Buscando aba ${i + 1} de ${validTabs.length}: "${validTabs[i].name}"…`);
+
+        const data = await generateMultiStudy({
+          tabs: [validTabs[i]],
+          locations: geoChips,
+          country,
+          limit,
+        });
+
+        if (!studyMeta) {
+          studyMeta = {
+            id: data.id,
+            created_at: data.created_at,
+            country: data.country,
+            default_locations: data.default_locations,
+          };
+        }
+
+        if (data.tabs[0]) allTabResults.push(data.tabs[0]);
+
+        setResult({ ...studyMeta, tabs: [...allTabResults] });
+        if (i === 0) setActiveTab(data.tabs[0]?.name ?? null);
+      }
+
+      const total = allTabResults.reduce((acc, t) => acc + t.items.length, 0);
+      setStatus(`${allTabResults.length} abas geradas. Total keywords: ${total}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao gerar estudo.");
+      if (studyMeta && allTabResults.length > 0) {
+        setResult({ ...studyMeta, tabs: allTabResults });
+      }
     } finally {
       setLoading(false);
     }
