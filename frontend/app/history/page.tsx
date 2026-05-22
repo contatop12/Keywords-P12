@@ -20,6 +20,10 @@ function formatDate(iso: string): string {
   return `${day} ${mon} ${yr} · ${hh}:${mm}`;
 }
 
+function pad(n: number, size = 3): string {
+  return String(n).padStart(size, "0");
+}
+
 export default function HistoryPage() {
   const [studies, setStudies] = useState<StudyIndexEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,9 +51,13 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="root-layout">
+    <div className="shell">
       <header className="topbar">
-        <div className="topbar-inner mono">
+        <div className="brand">
+          <span className="brand-mark" aria-hidden />
+          <span>P12 / Keywords</span>
+        </div>
+        <div className="topbar-meta">
           <Link href="/multi" style={{ color: "var(--text-dim)" }}>← Voltar</Link>
           <span className="brand-divider">·</span>
           <span>histórico</span>
@@ -71,94 +79,87 @@ export default function HistoryPage() {
           <span className="dim">Multi-Aba Google Ads.</span>
         </h1>
         <p className="hero-sub">
-          Todos os estudos gerados. Clique em Reabrir para editar seeds e gerar novo estudo.
+          Todos os estudos gerados pela equipe. Clique em Reabrir para editar seeds e gerar novo estudo.
         </p>
         <div className="hero-stats">
           <div className="hero-stat">
             <div className="hero-stat-label mono">Estudos</div>
             <div className="hero-stat-value mono">
-              <span className="accent">{String(studies.length).padStart(3, "0")}</span>
+              <span className="accent">{pad(studies.length)}</span>
+            </div>
+          </div>
+          <div className="hero-stat">
+            <div className="hero-stat-label mono">Keywords total</div>
+            <div className="hero-stat-value mono">
+              <span className="accent">
+                {pad(studies.reduce((acc, s) => acc + s.keyword_count, 0), 6)}
+              </span>
             </div>
           </div>
         </div>
       </section>
 
       {error && (
-        <div className="status error mono" style={{ margin: "0 var(--gap)" }}>
-          {error}
-        </div>
+        <div className="status error mono">{error}</div>
       )}
 
       {loading && (
-        <div className="status info mono" style={{ margin: "0 var(--gap)" }}>
-          Carregando histórico…
-        </div>
+        <div className="status info mono">Carregando histórico…</div>
       )}
 
       {!loading && studies.length === 0 && !error && (
-        <div className="status info mono" style={{ margin: "0 var(--gap)" }}>
+        <div className="status info mono">
           Nenhum estudo salvo ainda. Gere um estudo em{" "}
-          <Link href="/multi" style={{ color: "var(--accent)" }}>
-            /multi
-          </Link>{" "}
+          <Link href="/multi" style={{ color: "var(--accent)" }}>/multi</Link>{" "}
           para aparecer aqui.
         </div>
       )}
 
       {studies.length > 0 && (
-        <div style={{ padding: "0 var(--gap)", display: "flex", flexDirection: "column", gap: 12 }}>
-          {studies.map((s) => (
+        <div className="panel" style={{ display: "flex", flexDirection: "column", gap: 0, padding: 0, overflow: "hidden" }}>
+          {studies.map((s, i) => (
             <div
               key={s.id}
-              className="panel"
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr auto",
-                gap: "12px 24px",
-                alignItems: "start",
+                gap: "8px 20px",
+                alignItems: "center",
+                padding: "16px 20px",
+                borderBottom: i < studies.length - 1 ? "1px solid var(--border)" : "none",
               }}
             >
-              {/* Left: info */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                  <span
-                    className="mono"
-                    style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--text)" }}
-                  >
+              {/* Info */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                  <span className="mono" style={{ fontWeight: 700, color: "var(--text)", fontSize: "0.95rem" }}>
                     {s.client_name || "—"}
                   </span>
                   {s.brief_preview && (
-                    <span className="mono" style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
+                    <span className="mono" style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
                       {s.brief_preview}
                     </span>
                   )}
                 </div>
-                <div
-                  className="mono"
-                  style={{ fontSize: "0.75rem", color: "var(--text-faint)", display: "flex", gap: 16 }}
-                >
+                <div className="mono" style={{ fontSize: "0.72rem", color: "var(--text-faint)", display: "flex", gap: 16, flexWrap: "wrap" }}>
                   <span>{formatDate(s.created_at)}</span>
-                  <span>
-                    <span className="accent">{s.tab_count}</span> abas
-                  </span>
-                  <span>
-                    <span className="accent">{s.keyword_count.toLocaleString("pt-BR")}</span> keywords
-                  </span>
+                  <span><span className="accent">{s.tab_count}</span> abas</span>
+                  <span><span className="accent">{s.keyword_count.toLocaleString("pt-BR")}</span> keywords</span>
                 </div>
               </div>
 
-              {/* Right: actions */}
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                 <Link
                   href={`/multi?load=${s.id}`}
                   className="btn-primary mono"
-                  style={{ fontSize: "0.75rem", padding: "6px 14px" }}
+                  style={{ fontSize: "0.72rem", padding: "5px 14px", whiteSpace: "nowrap" }}
                 >
                   Reabrir →
                 </Link>
                 <button
                   className="btn-secondary mono"
-                  style={{ fontSize: "0.75rem", padding: "6px 12px", color: "var(--text-dim)" }}
+                  style={{ fontSize: "0.72rem", padding: "5px 12px", color: "var(--text-dim)", whiteSpace: "nowrap" }}
                   onClick={() => handleDelete(s.id)}
                   disabled={deletingId === s.id}
                 >
@@ -170,9 +171,9 @@ export default function HistoryPage() {
         </div>
       )}
 
-      <footer className="site-footer mono">
+      <footer className="foot mono">
         <span>© P12 Digital · uso interno</span>
-        <span>Keywords-P12 · histórico</span>
+        <span>keywords-p12 · histórico</span>
       </footer>
     </div>
   );
