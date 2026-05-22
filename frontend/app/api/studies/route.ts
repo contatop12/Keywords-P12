@@ -24,7 +24,7 @@ type SavePayload = {
 
 async function getKV(): Promise<KVNamespace> {
   const ctx = await getCloudflareContext();
-  const kv = (ctx.env as Record<string, unknown>).STUDIES_KV as KVNamespace | undefined;
+  const kv = (ctx.env as unknown as Record<string, unknown>).STUDIES_KV as KVNamespace | undefined;
   if (!kv) throw new Error("STUDIES_KV não configurado.");
   return kv;
 }
