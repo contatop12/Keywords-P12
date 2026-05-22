@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 
 import {
   generateMultiStudy,
@@ -68,8 +67,6 @@ const DEFAULT_TABS: TabDraft[] = [
 ];
 
 export default function MultiStudyPage() {
-  const searchParams = useSearchParams();
-
   const [tabs, setTabs] = useState<TabDraft[]>(DEFAULT_TABS);
   const [country, setCountry] = useState("BR");
   const [limit, setLimit] = useState(2000);
@@ -109,7 +106,7 @@ export default function MultiStudyPage() {
 
   // Load study from history (?load=id)
   useEffect(() => {
-    const loadId = searchParams.get("load");
+    const loadId = new URLSearchParams(window.location.search).get("load");
     if (!loadId) return;
     setStatus("Carregando estudo do histórico…");
     getStudy(loadId).then((stored) => {
