@@ -80,6 +80,7 @@ export default function MultiStudyPage() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [sheetsLoading, setSheetsLoading] = useState(false);
+  const [sheetsUrl, setSheetsUrl] = useState<string | null>(null);
 
   const [brief, setBrief] = useState({
     cliente: "",
@@ -341,8 +342,10 @@ export default function MultiStudyPage() {
   async function onExportSheets() {
     if (!result) return;
     setSheetsLoading(true);
+    setSheetsUrl(null);
     try {
       const { url } = await exportMultiStudyToSheets(result);
+      setSheetsUrl(url);
       window.open(url, "_blank");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao exportar para Google Sheets.");
@@ -772,6 +775,14 @@ export default function MultiStudyPage() {
 
       {error && <div className="status error mono">{error}</div>}
       {status && <div className="status info mono">{status}</div>}
+      {sheetsUrl && (
+        <div className="status info mono" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span>Planilha criada:</span>
+          <a href={sheetsUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+            Abrir Google Sheets →
+          </a>
+        </div>
+      )}
 
       {result && (
         <>

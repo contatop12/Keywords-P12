@@ -117,46 +117,36 @@ async function getSheetIds(token: string, spreadsheetId: string): Promise<Map<st
   return map;
 }
 
-async function ensureSheet(
-  token: string,
-  spreadsheetId: string,
-  title: string,
-  existingIds: Map<string, number>,
-  isFirst: boolean,
-): Promise<void> {
-  if (existingIds.has(title)) return;
-
-  if (isFirst && existingIds.size > 0) {
-    const [firstTitle, firstId] = existingIds.entries().next().value as [string, number];
-    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        requests: [{
-          updateSheetProperties: {
-            properties: { sheetId: firstId, title },
-            fields: "title",
-          },
-        }],
-      }),
-    });
-    if (!res.ok) throw new Error(`Rename sheet falhou: ${await res.text()}`);
-    existingIds.delete(firstTitle);
-    existingIds.set(title, firstId);
-    return;
-  }
-
+async function renameSheet(token: string, spreadsheetId: string, sheetId: number, newTitle: string): Promise<void> {
   const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ requests: [{ addSheet: { properties: { title } } }] }),
+    body: JSON.stringify({
+      requests: [{ updateSheetProperties: { properties: { sheetId, title: newTitle }, fields: "title" } }],
+    }),
   });
-  if (!res.ok) throw new Error(`Add sheet falhou: ${await res.text()}`);
+  if (!res.ok) throw new Error(`Rename sheet falhou: ${await res.text()}`);
+}
+
+async function duplicateSheet(
+  token: string,
+  spreadsheetId: string,
+  sourceSheetId: number,
+  newTitle: string,
+  insertSheetIndex: number,
+): Promise<number> {
+  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      requests: [{ duplicateSheet: { sourceSheetId, insertSheetIndex, newSheetName: newTitle } }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Duplicate sheet falhou: ${await res.text()}`);
   const data = (await res.json()) as {
-    replies?: Array<{ addSheet?: { properties?: { sheetId?: number } } }>;
+    replies?: Array<{ duplicateSheet?: { properties?: { sheetId?: number } } }>;
   };
-  const newId = data.replies?.[0]?.addSheet?.properties?.sheetId ?? 0;
-  existingIds.set(title, newId);
+  return data.replies?.[0]?.duplicateSheet?.properties?.sheetId ?? 0;
 }
 
 async function writeSheet(token: string, spreadsheetId: string, sheetTitle: string, rows: unknown[][]): Promise<void> {
@@ -201,9 +191,16 @@ export async function POST(req: Request) {
     const spreadsheetId = await copyTemplate(token, templateId, title);
     const existingIds = await getSheetIds(token, spreadsheetId);
 
+    // Template's first sheet — source for all duplicates (preserves formatting)
+    const firstEntry = existingIds.entries().next().value as [string, number] | undefined;
+    if (!firstEntry) throw new Error("Template sem abas.");
+    const [, templateSheetId] = firstEntry;
+
     const tabs = study.tabs ?? [];
     const usedTitles = new Set<string>();
+    const tabNames: string[] = [];
 
+    // Phase 1: create all sheets by duplicating the template Geral tab
     for (let i = 0; i < tabs.length; i++) {
       const tab = tabs[i];
       let sheetName = safeTitle(tab.name ?? "Aba");
@@ -213,8 +210,19 @@ export async function POST(req: Request) {
         sheetName = `${sheetName.slice(0, 28)} (${n})`;
       }
       usedTitles.add(sheetName);
+      tabNames.push(sheetName);
 
-      await ensureSheet(token, spreadsheetId, sheetName, existingIds, i === 0);
+      if (i === 0) {
+        await renameSheet(token, spreadsheetId, templateSheetId, sheetName);
+      } else {
+        // Duplicate BEFORE writing data so all copies get the clean template formatting
+        await duplicateSheet(token, spreadsheetId, templateSheetId, sheetName, i);
+      }
+    }
+
+    // Phase 2: write data into each sheet
+    for (let i = 0; i < tabs.length; i++) {
+      const tab = tabs[i];
       const rows = buildRows(
         (tab.items ?? []) as Item[],
         tab.seeds ?? [],
@@ -223,7 +231,7 @@ export async function POST(req: Request) {
         year,
         locLabel,
       );
-      await writeSheet(token, spreadsheetId, sheetName, rows);
+      await writeSheet(token, spreadsheetId, tabNames[i], rows);
     }
 
     return Response.json({ url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit` });
