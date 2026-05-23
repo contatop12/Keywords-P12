@@ -477,7 +477,7 @@ class GoogleKeywordService:
                 "geoTargetConstants": [f"geoTargetConstants/{loc_id}" for loc_id in location_ids],
                 "keywordSeed": {"keywords": batch},
                 "includeAdultKeywords": settings.google_ads_include_adult_keywords,
-                "keywordPlanNetwork": "GOOGLE_SEARCH_AND_PARTNERS",
+                "keywordPlanNetwork": "GOOGLE_SEARCH",
                 "keywordAnnotation": ["KEYWORD_CONCEPT"],
                 "pageSize": page_size,
             }

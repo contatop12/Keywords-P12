@@ -96,9 +96,18 @@ function monthLabel(month: string, year: number): string {
 }
 
 function percentage(current: number | null, prev: number | null): string | null {
-  if (current === null || prev === null || prev === 0) return null;
+  if (current === null || prev === null) return null;
+  if (prev === 0) return "0%";
   const pct = ((current - prev) / prev) * 100;
   return `${pct >= 0 ? "+" : ""}${Math.round(pct)}%`;
+}
+
+function fmtApiChange(raw: number | string | null | undefined): string | null {
+  if (raw == null) return null;
+  const n = typeof raw === "string" ? parseFloat(raw) : raw;
+  if (!Number.isFinite(n)) return null;
+  const pct = Math.round(n * 100);
+  return `${pct >= 0 ? "+" : ""}${pct}%`;
 }
 
 function e(readEnv: (key: string) => string | undefined, key: string, fallback = ""): string {
@@ -325,7 +334,8 @@ export async function googleKeywordSearchWithVariants(params: {
       geoTargetConstants: locationIds.map((id) => `geoTargetConstants/${id}`),
       keywordSeed: { keywords: uniqueKeywords },
       includeAdultKeywords: config.includeAdultKeywords,
-      keywordPlanNetwork: "GOOGLE_SEARCH_AND_PARTNERS",
+      keywordPlanNetwork: "GOOGLE_SEARCH",
+      keywordAnnotation: ["KEYWORD_CONCEPT"],
       pageSize,
     };
     if (pageToken) {
@@ -358,10 +368,18 @@ export async function googleKeywordSearchWithVariants(params: {
           competitionIndex?: number | string;
           lowTopOfPageBidMicros?: number | string;
           highTopOfPageBidMicros?: number | string;
+          threeMonthChangeInSearches?: number | string;
+          twelveMonthChangeInSearches?: number | string;
           monthlySearchVolumes?: Array<{
             year?: number | string;
             month?: string;
             monthlySearches?: number | string;
+          }>;
+        };
+        keywordAnnotations?: {
+          concepts?: Array<{
+            name?: string;
+            conceptGroup?: { name?: string };
           }>;
         };
       }>;
@@ -407,17 +425,29 @@ export async function googleKeywordSearchWithVariants(params: {
       const competitionIndex = toInt(metrics.competitionIndex);
       const lowBid = toInt(metrics.lowTopOfPageBidMicros);
       const highBid = toInt(metrics.highTopOfPageBidMicros);
+      const change3m = fmtApiChange(metrics.threeMonthChangeInSearches) ?? percentage(current, before3);
+      const changeYoy = fmtApiChange(metrics.twelveMonthChangeInSearches) ?? percentage(current, yearAgo);
       const index = output.length + 1;
+
+      const firstConcept = item.keywordAnnotations?.concepts?.[0];
+      const conceptName = firstConcept?.name?.trim() || null;
+      const conceptGroup = firstConcept?.conceptGroup?.name?.trim() || null;
+      const path: string[] = [];
+      if (conceptGroup) path.push(`Tema Google: ${conceptGroup}`);
+      if (conceptName && conceptName !== conceptGroup) path.push(`Conceito: ${conceptName}`);
+      if (competition) path.push(`Concorrência: ${ptCompetition(competition)}`);
+      if (competitionIndex !== null) path.push(`CompetitionIndex: ${competitionIndex}`);
+      for (const v of (item.closeVariants ?? []).slice(0, 3)) path.push(`Variant: ${v}`);
 
       output.push({
         id: `google_kw_${index}_${text.slice(0, 40)}`,
         name: text,
         audience_size: toInt(metrics.avgMonthlySearches),
         type: ptCompetition(competition),
-        path: (item.closeVariants ?? []).slice(0, 3).map((v) => `Variant: ${v}`),
+        path,
         media_pesquisas: toInt(metrics.avgMonthlySearches),
-        mudanca_tres_meses: percentage(current, before3),
-        mudanca_ano_anterior: percentage(current, yearAgo),
+        mudanca_tres_meses: change3m,
+        mudanca_ano_anterior: changeYoy,
         concorrencia: ptCompetition(competition),
         grau_concorrencia: competitionIndex,
         menor_lance_topo: lowBid !== null ? lowBid / 1_000_000 : null,

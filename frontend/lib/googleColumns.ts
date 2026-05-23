@@ -1,5 +1,19 @@
-export const GOOGLE_YOY_LABEL =
-  "Mudança em relação ao mesmo mês do ano anterior (março/25 e 26)";
+export const GOOGLE_YOY_LABEL = "Mudança em relação ao mesmo mês do ano anterior";
+
+const PT_MONTH_NAMES = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
 
 export const GOOGLE_STATIC_HEADERS = [
   "Palavra-Chave",
@@ -12,20 +26,17 @@ export const GOOGLE_STATIC_HEADERS = [
   "Maiores valores para aparecer no topo da pesquisa",
 ] as const;
 
-export const GOOGLE_MONTH_COLUMNS = [
-  "Searches: Abril 2025",
-  "Searches: Maio 2025",
-  "Searches: Junho 2025",
-  "Searches: Julho 2025",
-  "Searches: Agosto 2025",
-  "Searches: Setembro 2025",
-  "Searches: Outubro 2025",
-  "Searches: Novembro 2025",
-  "Searches: Dezembro 2025",
-  "Searches: Janeiro 2026",
-  "Searches: Fevereiro 2026",
-  "Searches: Março 2026",
-] as const;
+function buildMonthColumns(): string[] {
+  const now = new Date();
+  const cols: string[] = [];
+  for (let offset = 11; offset >= 0; offset--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+    cols.push(`Searches: ${PT_MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`);
+  }
+  return cols;
+}
+
+export const GOOGLE_MONTH_COLUMNS = buildMonthColumns();
 
 export type GoogleTableColumn = { key: string; label: string };
 
@@ -44,14 +55,7 @@ export function buildGoogleTableColumns(): GoogleTableColumn[] {
 }
 
 export function normalizeMonthlySearches(raw?: Record<string, number>): Record<string, number> {
-  const source = raw ?? {};
-  const output: Record<string, number> = {};
-  for (const label of GOOGLE_MONTH_COLUMNS) {
-    if (label in source) {
-      output[label] = source[label];
-    }
-  }
-  return output;
+  return raw ? { ...raw } : {};
 }
 
 export function splitGoogleKeywords(raw: string): string[] {

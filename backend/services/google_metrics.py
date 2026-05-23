@@ -1,6 +1,21 @@
-GOOGLE_YOY_LABEL = (
-    "Mudança em relação ao mesmo mês do ano anterior (março/25 e 26)"
-)
+from datetime import datetime
+
+GOOGLE_YOY_LABEL = "Mudança em relação ao mesmo mês do ano anterior"
+
+_PT_MONTH_NAMES = {
+    1: "Janeiro",
+    2: "Fevereiro",
+    3: "Março",
+    4: "Abril",
+    5: "Maio",
+    6: "Junho",
+    7: "Julho",
+    8: "Agosto",
+    9: "Setembro",
+    10: "Outubro",
+    11: "Novembro",
+    12: "Dezembro",
+}
 
 GOOGLE_STATIC_HEADERS = [
     "Palavra-Chave",
@@ -13,22 +28,22 @@ GOOGLE_STATIC_HEADERS = [
     "Maiores valores para aparecer no topo da pesquisa",
 ]
 
-GOOGLE_MONTH_COLUMNS = [
-    "Searches: Abril 2025",
-    "Searches: Maio 2025",
-    "Searches: Junho 2025",
-    "Searches: Julho 2025",
-    "Searches: Agosto 2025",
-    "Searches: Setembro 2025",
-    "Searches: Outubro 2025",
-    "Searches: Novembro 2025",
-    "Searches: Dezembro 2025",
-    "Searches: Janeiro 2026",
-    "Searches: Fevereiro 2026",
-    "Searches: Março 2026",
-]
+
+def _build_month_columns() -> list[str]:
+    now = datetime.now()
+    cols: list[str] = []
+    for offset in range(11, -1, -1):
+        m = now.month - offset
+        y = now.year
+        while m <= 0:
+            m += 12
+            y -= 1
+        cols.append(f"Searches: {_PT_MONTH_NAMES[m]} {y}")
+    return cols
+
+
+GOOGLE_MONTH_COLUMNS: list[str] = _build_month_columns()
 
 
 def normalize_monthly_searches(raw: dict[str, int] | None) -> dict[str, int]:
-    source = raw or {}
-    return {label: source[label] for label in GOOGLE_MONTH_COLUMNS if label in source}
+    return dict(raw) if raw else {}
