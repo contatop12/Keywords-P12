@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 from datetime import datetime
 from typing import Any
 
@@ -12,6 +13,23 @@ from backend.services.google_metrics import normalize_monthly_searches
 from backend.services.relevance_agent import KeywordRelevanceAgent
 
 logger = logging.getLogger(__name__)
+
+KEYWORD_SEED_BATCH_SIZE = 20
+
+
+def _dedupe_keywords(keywords: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for kw in keywords:
+        cleaned = kw.strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(cleaned)
+    return out
 
 
 class GoogleKeywordService:
@@ -494,7 +512,7 @@ class GoogleKeywordService:
                 logger.error("Google Ads batch erro: status=%s body=%s", response.status_code, response.text)
                 raise HTTPException(
                     status_code=502,
-                    detail="Google Ads retornou erro ao buscar keywords. Verifique customer/login/developer token.",
+                    detail=f"Google Ads retornou erro na busca: {response.text}",
                 )
 
             payload = response.json()
@@ -523,24 +541,25 @@ class GoogleKeywordService:
         if not self.keyword_ideas_url:
             raise HTTPException(status_code=500, detail="GOOGLE_ADS_CUSTOMER_ID invalido.")
 
-        seed_keywords = [kw.strip() for kw in keywords if kw and kw.strip()]
+        seed_keywords = _dedupe_keywords(keywords)
         if not seed_keywords:
             return [], []
 
         access_token = self._get_access_token()
         location_ids = self._location_ids_for_locations(locations or [], country, access_token=access_token)
 
-        batch_size = 10
         all_items: list[InterestItem] = []
         all_variants: list[str] = []
-        for i in range(0, len(seed_keywords), batch_size):
-            batch = seed_keywords[i : i + batch_size]
+        for i in range(0, len(seed_keywords), KEYWORD_SEED_BATCH_SIZE):
+            if i > 0:
+                time.sleep(5)
+            batch = seed_keywords[i : i + KEYWORD_SEED_BATCH_SIZE]
             batch_items, batch_variants = self._call_batch(
                 batch,
                 access_token,
                 location_ids,
                 limit,
-                index_offset=i,
+                index_offset=len(all_items),
             )
             all_items.extend(batch_items)
             all_variants.extend(batch_variants)

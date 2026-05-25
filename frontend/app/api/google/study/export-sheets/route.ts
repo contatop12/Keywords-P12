@@ -89,6 +89,15 @@ async function getToken(clientId: string, clientSecret: string, refreshToken: st
   return data.access_token;
 }
 
+async function makeFilePublic(token: string, fileId: string): Promise<void> {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ type: "anyone", role: "reader" }),
+  });
+  if (!res.ok) throw new Error(`Drive permissions falhou: ${await res.text()}`);
+}
+
 async function copyTemplate(token: string, templateId: string, title: string): Promise<string> {
   const res = await fetch(`https://www.googleapis.com/drive/v3/files/${templateId}/copy`, {
     method: "POST",
@@ -233,6 +242,8 @@ export async function POST(req: Request) {
       );
       await writeSheet(token, spreadsheetId, tabNames[i], rows);
     }
+
+    await makeFilePublic(token, spreadsheetId);
 
     return Response.json({ url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit` });
   } catch (err) {

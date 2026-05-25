@@ -299,6 +299,22 @@ export async function googleGeoSuggestions(params: {
   );
 }
 
+const KEYWORD_SEED_BATCH_SIZE = 20;
+
+function dedupeKeywords(keywords: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const k of keywords) {
+    const trimmed = k.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return out;
+}
+
 export async function googleKeywordSearchWithVariants(params: {
   readEnv: (key: string) => string | undefined;
   keywords: string[];
@@ -312,154 +328,163 @@ export async function googleKeywordSearchWithVariants(params: {
   const locationIds = await resolveLocationIds(config, token, params.locations, params.country);
   const endpoint = `https://googleads.googleapis.com/${config.apiVersion}/customers/${config.customerId}:generateKeywordIdeas`;
 
-  const uniqueKeywords = Array.from(
-    new Set(params.keywords.map((k) => k.trim()).filter(Boolean).map((k) => k.toLowerCase()))
-  ).slice(0, 50);
+  const uniqueKeywords = dedupeKeywords(params.keywords);
 
   const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
   const output: SearchResultItem[] = [];
   const closeVariants: string[] = [];
-  let pageToken: string | undefined;
+  const seenNames = new Set<string>();
   let remaining = Math.max(params.limit, 1);
-  let pageIndex = 0;
 
-  while (remaining > 0) {
-    if (pageIndex > 0) await sleep(5000);
-    pageIndex++;
+  for (let batchStart = 0; batchStart < uniqueKeywords.length && remaining > 0; batchStart += KEYWORD_SEED_BATCH_SIZE) {
+    if (batchStart > 0) await sleep(5000);
 
-    const pageSize = Math.min(remaining, 10_000);
-    const body: Record<string, unknown> = {
-      language: `languageConstants/${config.defaultLanguageId}`,
-      geoTargetConstants: locationIds.map((id) => `geoTargetConstants/${id}`),
-      keywordSeed: { keywords: uniqueKeywords },
-      includeAdultKeywords: config.includeAdultKeywords,
-      keywordPlanNetwork: "GOOGLE_SEARCH",
-      keywordAnnotation: ["KEYWORD_CONCEPT"],
-      pageSize,
-    };
-    if (pageToken) {
-      body.pageToken = pageToken;
-    }
+    const batch = uniqueKeywords.slice(batchStart, batchStart + KEYWORD_SEED_BATCH_SIZE);
+    let pageToken: string | undefined;
+    let pageIndex = 0;
 
-    let response: Response | undefined;
-    for (let attempt = 0; attempt <= 3; attempt++) {
-      if (attempt > 0) await sleep(7000);
-      const r = await fetch(endpoint, {
-        method: "POST",
-        headers: adsHeaders(config, token),
-        body: JSON.stringify(body),
-      });
-      if (r.ok) { response = r; break; }
-      const text = await r.text();
-      const isRateLimit = r.status === 429 || text.includes("RESOURCE_EXHAUSTED");
-      if (isRateLimit && attempt < 3) continue;
-      throw new Error(`Google Ads retornou erro na busca: ${text}`);
-    }
-    if (!response) throw new Error("Falha após múltiplas tentativas na busca.");
+    while (remaining > 0) {
+      if (pageIndex > 0) await sleep(5000);
+      pageIndex++;
 
-    const data = (await response.json()) as {
-      results?: Array<{
-        text?: string;
-        closeVariants?: string[];
-        keywordIdeaMetrics?: {
-          avgMonthlySearches?: number | string;
-          competition?: string;
-          competitionIndex?: number | string;
-          lowTopOfPageBidMicros?: number | string;
-          highTopOfPageBidMicros?: number | string;
-          threeMonthChangeInSearches?: number | string;
-          twelveMonthChangeInSearches?: number | string;
-          monthlySearchVolumes?: Array<{
-            year?: number | string;
-            month?: string;
-            monthlySearches?: number | string;
-          }>;
-        };
-        keywordAnnotations?: {
-          concepts?: Array<{
-            name?: string;
-            conceptGroup?: { name?: string };
-          }>;
-        };
-      }>;
-      nextPageToken?: string;
-    };
-
-    const pageResults = data.results ?? [];
-    for (const item of pageResults) {
-      const text = String(item.text ?? "").trim();
-      if (!text) continue;
-      for (const variant of item.closeVariants ?? []) {
-        const cleaned = String(variant).trim();
-        if (cleaned) closeVariants.push(cleaned);
+      const pageSize = Math.min(remaining, 10_000);
+      const body: Record<string, unknown> = {
+        language: `languageConstants/${config.defaultLanguageId}`,
+        geoTargetConstants: locationIds.map((id) => `geoTargetConstants/${id}`),
+        keywordSeed: { keywords: batch },
+        includeAdultKeywords: config.includeAdultKeywords,
+        keywordPlanNetwork: "GOOGLE_SEARCH",
+        keywordAnnotation: ["KEYWORD_CONCEPT"],
+        pageSize,
+      };
+      if (pageToken) {
+        body.pageToken = pageToken;
       }
-      const metrics = item.keywordIdeaMetrics ?? {};
-      const monthlyRaw = metrics.monthlySearchVolumes ?? [];
-      const monthlyParsed = monthlyRaw
-        .map((m) => {
-          const y = toInt(m.year);
-          const month = String(m.month ?? "").toUpperCase();
-          const val = toInt(m.monthlySearches);
-          if (!y || !month || val === null) return null;
-          const monthOrder: Record<string, number> = {
-            JANUARY: 1, FEBRUARY: 2, MARCH: 3, APRIL: 4, MAY: 5, JUNE: 6,
-            JULY: 7, AUGUST: 8, SEPTEMBER: 9, OCTOBER: 10, NOVEMBER: 11, DECEMBER: 12,
+
+      let response: Response | undefined;
+      for (let attempt = 0; attempt <= 3; attempt++) {
+        if (attempt > 0) await sleep(7000);
+        const r = await fetch(endpoint, {
+          method: "POST",
+          headers: adsHeaders(config, token),
+          body: JSON.stringify(body),
+        });
+        if (r.ok) { response = r; break; }
+        const text = await r.text();
+        const isRateLimit = r.status === 429 || text.includes("RESOURCE_EXHAUSTED");
+        if (isRateLimit && attempt < 3) continue;
+        throw new Error(`Google Ads retornou erro na busca: ${text}`);
+      }
+      if (!response) throw new Error("Falha após múltiplas tentativas na busca.");
+
+      const data = (await response.json()) as {
+        results?: Array<{
+          text?: string;
+          closeVariants?: string[];
+          keywordIdeaMetrics?: {
+            avgMonthlySearches?: number | string;
+            competition?: string;
+            competitionIndex?: number | string;
+            lowTopOfPageBidMicros?: number | string;
+            highTopOfPageBidMicros?: number | string;
+            threeMonthChangeInSearches?: number | string;
+            twelveMonthChangeInSearches?: number | string;
+            monthlySearchVolumes?: Array<{
+              year?: number | string;
+              month?: string;
+              monthlySearches?: number | string;
+            }>;
           };
-          const order = monthOrder[month];
-          if (!order) return null;
-          return { key: y * 100 + order, label: monthLabel(month, y), value: val };
-        })
-        .filter((x): x is { key: number; label: string; value: number } => Boolean(x))
-        .sort((a, b) => a.key - b.key)
-        .slice(-12);
+          keywordAnnotations?: {
+            concepts?: Array<{
+              name?: string;
+              conceptGroup?: { name?: string };
+            }>;
+          };
+        }>;
+        nextPageToken?: string;
+      };
 
-      const monthly = normalizeMonthlySearches(
-        Object.fromEntries(monthlyParsed.map((row) => [row.label, row.value]))
-      );
-      const values = Object.values(monthly);
-      const current = values.at(-1) ?? null;
-      const before3 = values.length >= 4 ? values.at(-4) ?? null : null;
-      const yearAgo = values.length >= 12 ? values.at(-12) ?? null : null;
-      const competition = String(metrics.competition ?? "");
-      const competitionIndex = toInt(metrics.competitionIndex);
-      const lowBid = toInt(metrics.lowTopOfPageBidMicros);
-      const highBid = toInt(metrics.highTopOfPageBidMicros);
-      const change3m = fmtApiChange(metrics.threeMonthChangeInSearches) ?? percentage(current, before3);
-      const changeYoy = fmtApiChange(metrics.twelveMonthChangeInSearches) ?? percentage(current, yearAgo);
-      const index = output.length + 1;
+      const pageResults = data.results ?? [];
+      for (const item of pageResults) {
+        const text = String(item.text ?? "").trim();
+        if (!text) continue;
+        const nameKey = text.toLowerCase();
+        if (seenNames.has(nameKey)) continue;
+        seenNames.add(nameKey);
 
-      const firstConcept = item.keywordAnnotations?.concepts?.[0];
-      const conceptName = firstConcept?.name?.trim() || null;
-      const conceptGroup = firstConcept?.conceptGroup?.name?.trim() || null;
-      const path: string[] = [];
-      if (conceptGroup) path.push(`Tema Google: ${conceptGroup}`);
-      if (conceptName && conceptName !== conceptGroup) path.push(`Conceito: ${conceptName}`);
-      if (competition) path.push(`Concorrência: ${ptCompetition(competition)}`);
-      if (competitionIndex !== null) path.push(`CompetitionIndex: ${competitionIndex}`);
-      for (const v of (item.closeVariants ?? []).slice(0, 3)) path.push(`Variant: ${v}`);
+        for (const variant of item.closeVariants ?? []) {
+          const cleaned = String(variant).trim();
+          if (cleaned) closeVariants.push(cleaned);
+        }
+        const metrics = item.keywordIdeaMetrics ?? {};
+        const monthlyRaw = metrics.monthlySearchVolumes ?? [];
+        const monthlyParsed = monthlyRaw
+          .map((m) => {
+            const y = toInt(m.year);
+            const month = String(m.month ?? "").toUpperCase();
+            const val = toInt(m.monthlySearches);
+            if (!y || !month || val === null) return null;
+            const monthOrder: Record<string, number> = {
+              JANUARY: 1, FEBRUARY: 2, MARCH: 3, APRIL: 4, MAY: 5, JUNE: 6,
+              JULY: 7, AUGUST: 8, SEPTEMBER: 9, OCTOBER: 10, NOVEMBER: 11, DECEMBER: 12,
+            };
+            const order = monthOrder[month];
+            if (!order) return null;
+            return { key: y * 100 + order, label: monthLabel(month, y), value: val };
+          })
+          .filter((x): x is { key: number; label: string; value: number } => Boolean(x))
+          .sort((a, b) => a.key - b.key)
+          .slice(-12);
 
-      output.push({
-        id: `google_kw_${index}_${text.slice(0, 40)}`,
-        name: text,
-        audience_size: toInt(metrics.avgMonthlySearches),
-        type: ptCompetition(competition),
-        path,
-        media_pesquisas: toInt(metrics.avgMonthlySearches),
-        mudanca_tres_meses: change3m,
-        mudanca_ano_anterior: changeYoy,
-        concorrencia: ptCompetition(competition),
-        grau_concorrencia: competitionIndex,
-        menor_lance_topo: lowBid !== null ? lowBid / 1_000_000 : null,
-        maior_lance_topo: highBid !== null ? highBid / 1_000_000 : null,
-        searches_mensais: monthly,
-      });
-    }
+        const monthly = normalizeMonthlySearches(
+          Object.fromEntries(monthlyParsed.map((row) => [row.label, row.value]))
+        );
+        const values = Object.values(monthly);
+        const current = values.at(-1) ?? null;
+        const before3 = values.length >= 4 ? values.at(-4) ?? null : null;
+        const yearAgo = values.length >= 12 ? values.at(-12) ?? null : null;
+        const competition = String(metrics.competition ?? "");
+        const competitionIndex = toInt(metrics.competitionIndex);
+        const lowBid = toInt(metrics.lowTopOfPageBidMicros);
+        const highBid = toInt(metrics.highTopOfPageBidMicros);
+        const change3m = fmtApiChange(metrics.threeMonthChangeInSearches) ?? percentage(current, before3);
+        const changeYoy = fmtApiChange(metrics.twelveMonthChangeInSearches) ?? percentage(current, yearAgo);
+        const index = output.length + 1;
 
-    remaining -= pageResults.length;
-    pageToken = data.nextPageToken;
-    if (!pageToken || pageResults.length === 0) {
-      break;
+        const firstConcept = item.keywordAnnotations?.concepts?.[0];
+        const conceptName = firstConcept?.name?.trim() || null;
+        const conceptGroup = firstConcept?.conceptGroup?.name?.trim() || null;
+        const path: string[] = [];
+        if (conceptGroup) path.push(`Tema Google: ${conceptGroup}`);
+        if (conceptName && conceptName !== conceptGroup) path.push(`Conceito: ${conceptName}`);
+        if (competition) path.push(`Concorrência: ${ptCompetition(competition)}`);
+        if (competitionIndex !== null) path.push(`CompetitionIndex: ${competitionIndex}`);
+        for (const v of (item.closeVariants ?? []).slice(0, 3)) path.push(`Variant: ${v}`);
+
+        output.push({
+          id: `google_kw_${index}_${text.slice(0, 40)}`,
+          name: text,
+          audience_size: toInt(metrics.avgMonthlySearches),
+          type: ptCompetition(competition),
+          path,
+          media_pesquisas: toInt(metrics.avgMonthlySearches),
+          mudanca_tres_meses: change3m,
+          mudanca_ano_anterior: changeYoy,
+          concorrencia: ptCompetition(competition),
+          grau_concorrencia: competitionIndex,
+          menor_lance_topo: lowBid !== null ? lowBid / 1_000_000 : null,
+          maior_lance_topo: highBid !== null ? highBid / 1_000_000 : null,
+          searches_mensais: monthly,
+        });
+        remaining--;
+      }
+
+      pageToken = data.nextPageToken;
+      if (!pageToken || pageResults.length === 0) {
+        break;
+      }
     }
   }
 

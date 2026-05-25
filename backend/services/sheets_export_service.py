@@ -60,6 +60,14 @@ def _copy_template(drive_service, title: str) -> str:
     return result["id"]
 
 
+def _make_file_public(drive_service, file_id: str) -> None:
+    drive_service.permissions().create(
+        fileId=file_id,
+        body={"type": "anyone", "role": "reader"},
+        fields="id",
+    ).execute()
+
+
 def _month_columns(month_name: str, year: int) -> list[str]:
     idx = _PT_MONTHS.index(month_name)
     sequence: list[tuple[str, int]] = []
@@ -173,6 +181,8 @@ def write_study_to_sheets(study: dict) -> str:
             start_row = 3
             end_col = gspread.utils.rowcol_to_a1(start_row + len(data_rows) - 1, len(data_rows[0]))
             ws.update(f"A{start_row}:{end_col}", data_rows)
+
+    _make_file_public(drive_service, new_id)
 
     url = f"https://docs.google.com/spreadsheets/d/{new_id}/edit"
     logger.info("Exportação Sheets concluída: %s", url)

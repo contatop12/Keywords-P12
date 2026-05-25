@@ -31,9 +31,9 @@ _SYSTEM_PROMPT = (
     "BLOCO 6 — INSTITUCIONAL\n"
     "- 1 cluster 'Institucional': nome próprio do cliente + variações de escrita + endereço + telefone + 'site'.\n\n"
     "REGRAS GERAIS:\n"
-    "- Cada cluster tem entre 8 e 15 seeds (palavras de partida expandidas pelo Planejador Google).\n"
+    "- Cada cluster tem seeds (palavras de partida expandidas pelo Planejador Google).\n"
     "- Inclua head terms + long tails + sinônimos. Elimine termos puramente informacionais.\n"
-    "- Nomes de cluster em português, curtos (max 31 chars), SEM os caracteres /\\?*[]: (proibidos no Excel).\n"
+    "- Nomes de cluster em português, descritivos, SEM os caracteres /\\?*[]: (proibidos no Excel).\n"
     "- Se houver seeds com restrição de política (medicamento de prescrição: ozempic, mounjaro, semaglutida), "
     "mova para cluster separado com observacao explícita sobre restrição.\n"
     "- NÃO limite o número de clusters. Gere todos os clusters necessários para cobrir o briefing completamente.\n\n"
@@ -42,7 +42,7 @@ _SYSTEM_PROMPT = (
     '  "estrategia": "Resumo curto (2-4 frases) da abordagem geral.",\n'
     '  "clusters": [\n'
     "    {\n"
-    '      "nome": "Nome da aba (max 31 chars)",\n'
+    '      "nome": "Nome da aba",\n'
     '      "intencao": "alta" | "media" | "baixa",\n'
     '      "prioridade": 1,\n'
     '      "seeds": ["seed 1", "seed 2", "seed 3", ...],\n'
@@ -94,7 +94,7 @@ def _sanitize_cluster(raw: dict) -> dict | None:
     seeds = raw.get("seeds")
     if not isinstance(nome, str) or not isinstance(seeds, list):
         return None
-    nome_clean = _INVALID_SHEET_CHARS.sub(" ", nome).strip()[:31]
+    nome_clean = _INVALID_SHEET_CHARS.sub(" ", nome).strip()
     if not nome_clean:
         return None
     seeds_clean: list[str] = []
@@ -110,8 +110,6 @@ def _sanitize_cluster(raw: dict) -> dict | None:
             continue
         seen.add(key)
         seeds_clean.append(s)
-        if len(seeds_clean) >= 15:
-            break
     if not seeds_clean:
         return None
 
@@ -172,8 +170,7 @@ def plan_keywords(brief: dict) -> dict:
         candidate = base
         counter = 2
         while candidate in used_names:
-            suffix = f" ({counter})"
-            candidate = (base[: 31 - len(suffix)] + suffix)
+            candidate = f"{base} ({counter})"
             counter += 1
         cluster["nome"] = candidate
         used_names.add(candidate)

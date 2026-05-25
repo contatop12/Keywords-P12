@@ -711,7 +711,6 @@ export default function MultiStudyPage() {
                     onChange={(e) => updateTab(tab.id, { name: e.target.value })}
                     placeholder="Nome da aba (ex: Botox · Toxina Botulínica)"
                     style={{ flex: 1 }}
-                    maxLength={31}
                   />
                   <button
                     type="button"

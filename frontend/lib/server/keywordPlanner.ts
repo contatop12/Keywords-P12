@@ -6,7 +6,7 @@ const SYSTEM_PROMPT =
   "consulta/comprar).\n\n" +
   "REGRAS CRÍTICAS:\n" +
   "1. Cada cluster vira uma ABA do estudo Google Ads.\n" +
-  "2. Cada cluster tem entre 5 e 15 seeds (palavras de partida que serão expandidas pelo Planejador Google).\n" +
+  "2. Cada cluster tem seeds (palavras de partida que serão expandidas pelo Planejador Google).\n" +
   "3. Inclua head terms + long tails + sinônimos + variações geográficas + 'perto de mim' quando fizer sentido.\n" +
   "4. Elimine termos puramente informacionais (ex: 'o que é diabetes', 'como funciona ozempic').\n" +
   "5. Sempre crie um cluster 'Geral' agregando os termos centrais do nicho do cliente.\n" +
@@ -14,14 +14,14 @@ const SYSTEM_PROMPT =
   "7. Se houver concorrentes citados, crie 1 cluster 'Concorrentes' (resumo) + 1 cluster por concorrente (nome próprio + variações).\n" +
   "8. Crie cluster 'Institucional' com variações do nome próprio do cliente.\n" +
   "9. Para cada serviço/tema declarado, crie um cluster específico.\n" +
-  "10. Nomes de cluster em português, curtos (max 31 chars), SEM os caracteres /\\?*[]: (proibidos no Excel).\n" +
+  "10. Nomes de cluster em português, descritivos, SEM os caracteres /\\?*[]: (proibidos no Excel).\n" +
   "11. Sinalize seeds com possível restrição de política (ex: ozempic, mounjaro, semaglutida) em clusters separados com observacao explícita.\n\n" +
   'Responda APENAS com JSON neste formato exato:\n' +
   '{\n' +
   '  "estrategia": "Resumo curto (2-4 frases) da abordagem geral.",\n' +
   '  "clusters": [\n' +
   '    {\n' +
-  '      "nome": "Nome da aba (max 31 chars)",\n' +
+  '      "nome": "Nome da aba",\n' +
   '      "intencao": "alta",\n' +
   '      "prioridade": 1,\n' +
   '      "seeds": ["seed 1", "seed 2"],\n' +
@@ -104,7 +104,7 @@ function sanitizeCluster(raw: unknown): PlanCluster | null {
   const seeds = Array.isArray(r.seeds) ? r.seeds : null;
   if (!nome || !seeds) return null;
 
-  const nomeClean = nome.replace(INVALID_SHEET_CHARS, " ").trim().slice(0, 31);
+  const nomeClean = nome.replace(INVALID_SHEET_CHARS, " ").trim();
   if (!nomeClean) return null;
 
   const seedsClean: string[] = [];
@@ -117,7 +117,6 @@ function sanitizeCluster(raw: unknown): PlanCluster | null {
     if (seen.has(key)) continue;
     seen.add(key);
     seedsClean.push(s);
-    if (seedsClean.length >= 15) break;
   }
   if (!seedsClean.length) return null;
 
@@ -190,8 +189,7 @@ export async function planKeywords(readEnv: ReadEnv, brief: PlanBrief): Promise<
     let candidate = cluster.nome;
     let counter = 2;
     while (usedNames.has(candidate)) {
-      const suffix = ` (${counter})`;
-      candidate = cluster.nome.slice(0, 31 - suffix.length) + suffix;
+      candidate = `${cluster.nome} (${counter})`;
       counter++;
     }
     cluster.nome = candidate;

@@ -127,15 +127,17 @@ export interface MultiStudyResult {
 }
 
 export async function generateMultiStudy(payload: MultiStudyPayload): Promise<MultiStudyResult> {
+  // Sempre usa a rota Next.js (batching de seeds na API Google Ads).
+  const url = "/api/google/multi-study";
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}/api/google/multi-study`, {
+    response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
   } catch {
-    throw new Error(`Nao foi possivel conectar ao backend em ${API_BASE_URL || "mesma origem"}.`);
+    throw new Error("Nao foi possivel conectar ao servidor de estudos multi-aba.");
   }
   if (!response.ok) {
     const err = await response.json().catch(() => ({ detail: "Erro ao gerar estudo multi-aba." }));

@@ -3,6 +3,8 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
+from fastapi import HTTPException
+
 from backend.services.google_service import GoogleKeywordService
 
 logger = logging.getLogger(__name__)
@@ -29,6 +31,10 @@ def _run_single_tab(
             limit=limit,
             locations=locations,
         )
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+        logger.exception("Falha ao gerar aba %s", name)
+        return {"name": name, "seeds": cleaned_seeds, "items": [], "error": detail}
     except Exception as exc:
         logger.exception("Falha ao gerar aba %s", name)
         return {"name": name, "seeds": cleaned_seeds, "items": [], "error": str(exc)}
