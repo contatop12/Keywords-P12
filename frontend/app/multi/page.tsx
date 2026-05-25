@@ -867,7 +867,7 @@ export default function MultiStudyPage() {
       {status && <div className="status info mono">{status}</div>}
       {sheetsUrl && (
         <div className="status info mono" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span>Planilha criada:</span>
+          <span>Planilha pública (qualquer pessoa com o link pode ver):</span>
           <a href={sheetsUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
             Abrir Google Sheets →
           </a>

@@ -90,12 +90,31 @@ async function getToken(clientId: string, clientSecret: string, refreshToken: st
 }
 
 async function makeFilePublic(token: string, fileId: string): Promise<void> {
-  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "anyone", role: "reader" }),
+  const params = new URLSearchParams({ supportsAllDrives: "true" });
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}/permissions?${params}`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "anyone", role: "reader", allowFileDiscovery: false }),
+    },
+  );
+  if (res.ok) return;
+  const text = await res.text();
+  if (res.status === 409 || /already|duplicate/i.test(text)) return;
+  throw new Error(`Drive permissions falhou: ${text}`);
+}
+
+async function getPublicViewUrl(token: string, fileId: string): Promise<string> {
+  const params = new URLSearchParams({ fields: "webViewLink", supportsAllDrives: "true" });
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) throw new Error(`Drive permissions falhou: ${await res.text()}`);
+  if (res.ok) {
+    const data = (await res.json()) as { webViewLink?: string };
+    if (data.webViewLink) return data.webViewLink;
+  }
+  return `https://docs.google.com/spreadsheets/d/${fileId}/view?usp=sharing`;
 }
 
 async function copyTemplate(token: string, templateId: string, title: string): Promise<string> {
@@ -244,8 +263,9 @@ export async function POST(req: Request) {
     }
 
     await makeFilePublic(token, spreadsheetId);
+    const publicUrl = await getPublicViewUrl(token, spreadsheetId);
 
-    return Response.json({ url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit` });
+    return Response.json({ url: publicUrl });
   } catch (err) {
     return Response.json(
       { detail: err instanceof Error ? err.message : "Erro ao exportar para Google Sheets." },

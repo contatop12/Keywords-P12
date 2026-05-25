@@ -61,11 +61,27 @@ def _copy_template(drive_service, title: str) -> str:
 
 
 def _make_file_public(drive_service, file_id: str) -> None:
-    drive_service.permissions().create(
-        fileId=file_id,
-        body={"type": "anyone", "role": "reader"},
-        fields="id",
-    ).execute()
+    try:
+        drive_service.permissions().create(
+            fileId=file_id,
+            body={"type": "anyone", "role": "reader", "allowFileDiscovery": False},
+            supportsAllDrives=True,
+            fields="id",
+        ).execute()
+    except Exception as exc:
+        message = str(exc).lower()
+        if "already" in message or "duplicate" in message or "409" in message:
+            return
+        raise
+
+
+def _public_view_url(drive_service, file_id: str) -> str:
+    meta = (
+        drive_service.files()
+        .get(fileId=file_id, fields="webViewLink", supportsAllDrives=True)
+        .execute()
+    )
+    return meta.get("webViewLink") or f"https://docs.google.com/spreadsheets/d/{file_id}/view?usp=sharing"
 
 
 def _month_columns(month_name: str, year: int) -> list[str]:
@@ -184,6 +200,6 @@ def write_study_to_sheets(study: dict) -> str:
 
     _make_file_public(drive_service, new_id)
 
-    url = f"https://docs.google.com/spreadsheets/d/{new_id}/edit"
+    url = _public_view_url(drive_service, new_id)
     logger.info("Exportação Sheets concluída: %s", url)
     return url

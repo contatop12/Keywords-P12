@@ -264,15 +264,16 @@ export async function deleteStudy(id: string): Promise<void> {
 }
 
 export async function exportMultiStudyToSheets(study: MultiStudyResult): Promise<{ url: string }> {
+  const url = "/api/google/study/export-sheets";
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}/api/google/study/export-sheets`, {
+    response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ study }),
     });
   } catch {
-    throw new Error(`Nao foi possivel conectar ao backend em ${API_BASE_URL || "mesma origem"}.`);
+    throw new Error("Nao foi possivel conectar ao servidor de exportacao Google Sheets.");
   }
   if (!response.ok) {
     const err = await response.json().catch(() => ({ detail: "Erro ao exportar para Google Sheets." }));
