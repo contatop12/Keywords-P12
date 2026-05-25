@@ -60,7 +60,7 @@ export function normalizeMonthlySearches(raw?: Record<string, number>): Record<s
 
 export function splitGoogleKeywords(raw: string): string[] {
   return raw
-    .split(/[,;\n]+/)
+    .split(/[,;\r\n]+/)
     .map((part) => part.replace(/\s+/g, " ").trim())
     .filter(Boolean);
 }

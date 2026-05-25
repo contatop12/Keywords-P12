@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import Link from "next/link";
 
+import { splitGoogleKeywords } from "../../lib/googleColumns";
 import {
   generateMultiStudy,
   downloadMultiStudyXlsx,
@@ -19,6 +20,18 @@ import {
 import { GeoSuggestionItem } from "../../lib/types";
 
 type GeoType = "country" | "state" | "city";
+type SortDirection = "asc" | "desc";
+
+const TABLE_COLUMNS = [
+  { key: "name", label: "Palavra-Chave" },
+  { key: "media_pesquisas", label: "Média" },
+  { key: "mudanca_tres_meses", label: "3M" },
+  { key: "mudanca_ano_anterior", label: "YoY" },
+  { key: "concorrencia", label: "Concorrência" },
+  { key: "grau_concorrencia", label: "Grau" },
+  { key: "menor_lance_topo", label: "Lance min" },
+  { key: "maior_lance_topo", label: "Lance max" },
+] as const;
 
 interface TabDraft {
   id: string;
@@ -51,15 +64,44 @@ function geoValue(type: GeoType, value: string, id?: string): string {
   return id ? `${map[type]}:${normalized}#${id}` : `${map[type]}:${normalized}`;
 }
 
-function splitSeeds(raw: string): string[] {
-  return raw
-    .split(/[\n;,]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+function handleChipTextareaKeyDown(e: KeyboardEvent, commit: () => void) {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+    e.preventDefault();
+    commit();
+  }
+}
+
+function handleChipTextareaPaste(
+  e: ClipboardEvent,
+  commit: (raw: string) => void,
+) {
+  const text = e.clipboardData.getData("text");
+  if (!text || !/[,;\r\n]/.test(text)) return;
+  e.preventDefault();
+  commit(text);
 }
 
 function pad(n: number, size = 3): string {
   return String(n).padStart(size, "0");
+}
+
+function parsePercentChange(raw: unknown): number {
+  if (raw === null || raw === undefined) return Number.NEGATIVE_INFINITY;
+  const s = String(raw).trim();
+  if (!s || s === "—" || s === "--") return Number.NEGATIVE_INFINITY;
+  const match = s.match(/-?\d+(?:[.,]\d+)?/);
+  if (!match) return Number.NEGATIVE_INFINITY;
+  return Number(match[0].replace(",", "."));
+}
+
+function getSortValue(item: Record<string, unknown>, key: string): string | number {
+  if (key === "mudanca_tres_meses" || key === "mudanca_ano_anterior") {
+    return parsePercentChange(item[key]);
+  }
+  const value = item[key];
+  if (typeof value === "number") return value;
+  if (typeof value === "string") return value.toLowerCase();
+  return "";
 }
 
 const DEFAULT_TABS: TabDraft[] = [
@@ -79,6 +121,8 @@ export default function MultiStudyPage() {
 
   const [result, setResult] = useState<MultiStudyResult | null>(null);
   const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -142,10 +186,11 @@ export default function MultiStudyPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function commitBriefList(field: "servicos" | "concorrentes") {
+  function commitBriefList(field: "servicos" | "concorrentes", raw?: string) {
     setBrief((prev) => {
       const inputKey = `${field}Input` as "servicosInput" | "concorrentesInput";
-      const parsed = splitSeeds(prev[inputKey]);
+      const parsed = splitGoogleKeywords(raw ?? prev[inputKey]);
+      if (!parsed.length) return prev;
       const seen = new Set(prev[field].map((s) => s.toLowerCase()));
       const merged = [...prev[field]];
       for (const v of parsed) {
@@ -180,8 +225,8 @@ export default function MultiStudyPage() {
     try {
       const finalServicos = [...brief.servicos];
       const finalConcorrentes = [...brief.concorrentes];
-      const pendingServicos = splitSeeds(brief.servicosInput);
-      const pendingConcorrentes = splitSeeds(brief.concorrentesInput);
+      const pendingServicos = splitGoogleKeywords(brief.servicosInput);
+      const pendingConcorrentes = splitGoogleKeywords(brief.concorrentesInput);
       const seenS = new Set(finalServicos.map((s) => s.toLowerCase()));
       for (const s of pendingServicos) {
         if (seenS.has(s.toLowerCase())) continue;
@@ -278,11 +323,12 @@ export default function MultiStudyPage() {
     setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }
 
-  function commitSeedsFromInput(id: string) {
+  function commitSeedsFromInput(id: string, raw?: string) {
     setTabs((prev) =>
       prev.map((t) => {
         if (t.id !== id) return t;
-        const parsed = splitSeeds(t.seedsInput);
+        const parsed = splitGoogleKeywords(raw ?? t.seedsInput);
+        if (!parsed.length) return t;
         const merged = [...t.seeds];
         const seen = new Set(merged.map((s) => s.toLowerCase()));
         for (const s of parsed) {
@@ -320,7 +366,7 @@ export default function MultiStudyPage() {
     setSheetsUrl(null);
 
     const finalTabs = tabs.map((t) => {
-      const pending = splitSeeds(t.seedsInput);
+      const pending = splitGoogleKeywords(t.seedsInput);
       const seedSet = new Set(t.seeds.map((s) => s.toLowerCase()));
       const merged = [...t.seeds];
       for (const s of pending) {
@@ -447,6 +493,30 @@ export default function MultiStudyPage() {
     if (!result || !activeTab) return [];
     return result.tabs.find((t) => t.name === activeTab)?.items ?? [];
   }, [result, activeTab]);
+
+  const sortedItems = useMemo(() => {
+    const cloned = [...activeItems] as Record<string, unknown>[];
+    if (!sortColumn) return cloned;
+    cloned.sort((a, b) => {
+      const av = getSortValue(a, sortColumn);
+      const bv = getSortValue(b, sortColumn);
+      const cmp =
+        typeof av === "number" && typeof bv === "number"
+          ? av - bv
+          : String(av).localeCompare(String(bv), "pt-BR");
+      return sortDirection === "asc" ? cmp : -cmp;
+    });
+    return cloned;
+  }, [activeItems, sortColumn, sortDirection]);
+
+  function onSort(key: string) {
+    if (sortColumn === key) {
+      setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortColumn(key);
+    setSortDirection("asc");
+  }
 
   const totalSeeds = tabs.reduce((acc, t) => acc + t.seeds.length, 0);
 
@@ -594,7 +664,7 @@ export default function MultiStudyPage() {
             </div>
 
             <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <label htmlFor="brief-serv"><span className="idx">06</span> Serviços / temas (Enter ou vírgula)</label>
+              <label htmlFor="brief-serv"><span className="idx">06</span> Serviços / temas (uma por linha ou vírgula)</label>
               <div className="chips-box">
                 {brief.servicos.map((s) => (
                   <span className="chip-kw mono" key={s}>
@@ -602,21 +672,21 @@ export default function MultiStudyPage() {
                     <button type="button" onClick={() => removeBriefItem("servicos", s)} aria-label={`Remover ${s}`}>×</button>
                   </span>
                 ))}
-                <input
+                <textarea
                   id="brief-serv"
                   value={brief.servicosInput}
                   onChange={(e) => setBrief((p) => ({ ...p, servicosInput: e.target.value }))}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === ",") { e.preventDefault(); commitBriefList("servicos"); }
-                  }}
+                  onKeyDown={(e) => handleChipTextareaKeyDown(e, () => commitBriefList("servicos"))}
+                  onPaste={(e) => handleChipTextareaPaste(e, (raw) => commitBriefList("servicos", raw))}
                   onBlur={() => commitBriefList("servicos")}
-                  placeholder="Ex: menopausa, teste genético, obesidade, GLP-1…"
+                  placeholder={"menopausa\nteste genético\nobesidade, GLP-1"}
+                  rows={3}
                 />
               </div>
             </div>
 
             <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <label htmlFor="brief-conc"><span className="idx">07</span> Concorrentes (criará uma aba por nome)</label>
+              <label htmlFor="brief-conc"><span className="idx">07</span> Concorrentes (uma por linha ou vírgula)</label>
               <div className="chips-box">
                 {brief.concorrentes.map((s) => (
                   <span className="chip-kw mono" key={s}>
@@ -624,15 +694,15 @@ export default function MultiStudyPage() {
                     <button type="button" onClick={() => removeBriefItem("concorrentes", s)} aria-label={`Remover ${s}`}>×</button>
                   </span>
                 ))}
-                <input
+                <textarea
                   id="brief-conc"
                   value={brief.concorrentesInput}
                   onChange={(e) => setBrief((p) => ({ ...p, concorrentesInput: e.target.value }))}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === ",") { e.preventDefault(); commitBriefList("concorrentes"); }
-                  }}
+                  onKeyDown={(e) => handleChipTextareaKeyDown(e, () => commitBriefList("concorrentes"))}
+                  onPaste={(e) => handleChipTextareaPaste(e, (raw) => commitBriefList("concorrentes", raw))}
                   onBlur={() => commitBriefList("concorrentes")}
-                  placeholder="Ex: Dra. Paula Pires, Dra Viviane - Endoquali, Instituto Evolution…"
+                  placeholder={"Dra. Paula Pires\nInstituto Evolution"}
+                  rows={3}
                 />
               </div>
             </div>
@@ -730,17 +800,14 @@ export default function MultiStudyPage() {
                       </button>
                     </span>
                   ))}
-                  <input
+                  <textarea
                     value={tab.seedsInput}
                     onChange={(e) => updateTab(tab.id, { seedsInput: e.target.value })}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === ",") {
-                        e.preventDefault();
-                        commitSeedsFromInput(tab.id);
-                      }
-                    }}
+                    onKeyDown={(e) => handleChipTextareaKeyDown(e, () => commitSeedsFromInput(tab.id))}
+                    onPaste={(e) => handleChipTextareaPaste(e, (raw) => commitSeedsFromInput(tab.id, raw))}
                     onBlur={() => commitSeedsFromInput(tab.id)}
-                    placeholder="Seeds (Enter ou vírgula para adicionar)…"
+                    placeholder={"Uma seed por linha ou separadas por vírgula\nCtrl+Enter para adicionar"}
+                    rows={3}
                   />
                 </div>
                 <div className="chip-counter mono">
@@ -898,7 +965,11 @@ export default function MultiStudyPage() {
                 key={tab.name}
                 type="button"
                 className={`study-tab mono ${activeTab === tab.name ? "is-active" : ""}`}
-                onClick={() => setActiveTab(tab.name)}
+                onClick={() => {
+                  setActiveTab(tab.name);
+                  setSortColumn(null);
+                  setSortDirection("asc");
+                }}
               >
                 {tab.name}
                 <span style={{ color: tab.error ? "var(--error, #f55)" : "var(--text-faint)", marginLeft: 6, fontSize: 10 }}>
@@ -915,25 +986,38 @@ export default function MultiStudyPage() {
           )}
           <section className="table-shell">
             <div className="table-head-meta mono">
-              <span>{pad(activeItems.length, 4)} rows · {activeTab}</span>
+              <span>{pad(sortedItems.length, 4)} rows · {activeTab}</span>
+              <span className="dim">clique no título da coluna para ordenar</span>
             </div>
             <div className="table-scroll">
               <table>
                 <thead>
                   <tr>
-                    <th className="mono">Palavra-Chave</th>
-                    <th className="mono">Média</th>
-                    <th className="mono">3M</th>
-                    <th className="mono">YoY</th>
-                    <th className="mono">Concorrência</th>
-                    <th className="mono">Grau</th>
-                    <th className="mono">Lance min</th>
-                    <th className="mono">Lance max</th>
+                    {TABLE_COLUMNS.map((col) => (
+                      <th
+                        key={col.key}
+                        className="sortable mono"
+                        onClick={() => onSort(col.key)}
+                        title="Clique para ordenar (menor ↔ maior)"
+                        aria-sort={
+                          sortColumn === col.key
+                            ? sortDirection === "asc"
+                              ? "ascending"
+                              : "descending"
+                            : "none"
+                        }
+                      >
+                        {col.label}
+                        {sortColumn === col.key && (
+                          <span className="arrow">{sortDirection === "asc" ? "↑" : "↓"}</span>
+                        )}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {activeItems.map((item, idx) => {
-                    const it = item as Record<string, unknown>;
+                  {sortedItems.map((item, idx) => {
+                    const it = item;
                     return (
                       <tr key={`${activeTab}-${idx}`}>
                         <td className="name">{(it.name as string) || "—"}</td>

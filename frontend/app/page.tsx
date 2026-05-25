@@ -479,29 +479,31 @@ export default function HomePage() {
                   </button>
                 </span>
               ))}
-              <input
+              <textarea
                 id="google-kw-input"
                 value={googleKeywordInput}
                 onChange={(event) => setGoogleKeywordInput(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === ",") {
+                  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
                     event.preventDefault();
                     addGoogleKeywordsFromText(googleKeywordInput);
                   }
                 }}
                 onPaste={(event) => {
                   const text = event.clipboardData.getData("text");
-                  if (!text) return;
+                  if (!text || !/[,;\r\n]/.test(text)) return;
                   event.preventDefault();
-                  addGoogleKeywordsFromText(text, false);
+                  addGoogleKeywordsFromText(text);
                 }}
+                onBlur={() => addGoogleKeywordsFromText(googleKeywordInput)}
                 placeholder={
                   canAddMoreKeywords
-                    ? "Digite, cole com vírgula ou pressione Enter…"
+                    ? "Uma por linha ou vírgula · Ctrl+Enter para adicionar"
                     : `Limite de ${MAX_KEYWORDS} atingido`
                 }
                 disabled={!canAddMoreKeywords}
                 autoComplete="off"
+                rows={3}
               />
             </div>
             <div className="chip-counter mono">
