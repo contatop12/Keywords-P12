@@ -11,7 +11,7 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("ACCESS_TOKEN", "META_ACCESS_TOKEN"),
     )
-    meta_api_version: str = "v19.0"
+    meta_api_version: str = "v25.0"
     meta_locale: str = "pt_BR"
     meta_ad_account_id: str = Field(
         default="",

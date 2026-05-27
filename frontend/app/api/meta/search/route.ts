@@ -1,6 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-const META_API_VERSION = "v19.0";
+const META_API_VERSION = "v25.0";
 const META_LOCALE = "pt_BR";
 
 type Payload = {
