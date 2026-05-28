@@ -240,16 +240,23 @@ export async function saveStudy(
   briefPreview: string,
   brief: PlanBriefPayload
 ): Promise<void> {
-  await fetch("/api/studies", {
+  const res = await fetch("/api/studies", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ study, client_name: clientName, brief_preview: briefPreview, brief }),
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Erro ao salvar estudo." }));
+    throw new Error((err as { error?: string }).error ?? "Erro ao salvar estudo.");
+  }
 }
 
 export async function listStudies(): Promise<StudyIndexEntry[]> {
   const res = await fetch("/api/studies");
-  if (!res.ok) return [];
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Erro ao carregar histórico." }));
+    throw new Error((err as { error?: string }).error ?? "Erro ao carregar histórico.");
+  }
   return (await res.json()) as StudyIndexEntry[];
 }
 

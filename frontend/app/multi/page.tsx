@@ -445,7 +445,9 @@ export default function MultiStudyPage() {
             observacoes: brief.observacoes,
             negativar: brief.negativar,
           }
-        ).catch(() => {/* save failure is silent */});
+        ).catch((e: unknown) => {
+          setStatus(`Estudo gerado, mas não foi salvo no histórico: ${e instanceof Error ? e.message : String(e)}`);
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao gerar estudo.");
