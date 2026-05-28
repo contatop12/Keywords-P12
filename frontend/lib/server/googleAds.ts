@@ -95,6 +95,11 @@ function monthLabel(month: string, year: number): string {
   return `Searches: ${map[month.toUpperCase()] ?? month} ${year}`;
 }
 
+function avgNonNull(arr: (number | null)[]): number | null {
+  const valid = arr.filter((v): v is number => v !== null);
+  return valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
+}
+
 function percentage(current: number | null, prev: number | null): string | null {
   if (current === null || prev === null) return null;
   if (prev === 0) return "0%";
@@ -436,21 +441,21 @@ export async function googleKeywordSearchWithVariants(params: {
           })
           .filter((x): x is { key: number; label: string; value: number } => Boolean(x))
           .sort((a, b) => a.key - b.key)
-          .slice(-12);
+          .slice(-13);
 
         const monthly = normalizeMonthlySearches(
           Object.fromEntries(monthlyParsed.map((row) => [row.label, row.value]))
         );
         const values = Object.values(monthly);
-        const current = values.at(-1) ?? null;
-        const before3 = values.length >= 4 ? values.at(-4) ?? null : null;
-        const yearAgo = values.length >= 12 ? values.at(-12) ?? null : null;
+        const last3Avg = avgNonNull(values.slice(-3));
+        const prev3Avg = avgNonNull(values.slice(-6, -3));
+        const yearAgo = values.length >= 13 ? (values.at(-13) ?? null) : null;
         const competition = String(metrics.competition ?? "");
         const competitionIndex = toInt(metrics.competitionIndex);
         const lowBid = toInt(metrics.lowTopOfPageBidMicros);
         const highBid = toInt(metrics.highTopOfPageBidMicros);
-        const change3m = fmtApiChange(metrics.threeMonthChangeInSearches) ?? percentage(current, before3);
-        const changeYoy = fmtApiChange(metrics.twelveMonthChangeInSearches) ?? percentage(current, yearAgo);
+        const change3m = fmtApiChange(metrics.threeMonthChangeInSearches) ?? percentage(last3Avg, prev3Avg);
+        const changeYoy = fmtApiChange(metrics.twelveMonthChangeInSearches) ?? percentage(values.at(-1) ?? null, yearAgo);
         const index = output.length + 1;
 
         const firstConcept = item.keywordAnnotations?.concepts?.[0];
