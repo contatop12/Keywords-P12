@@ -1,4 +1,15 @@
-import { AgebriResult, BriefingData, DiscoveryResult, GeoSuggestionItem, SearchPayload, SearchResponse } from "./types";
+import {
+  AgebriResult,
+  BriefingData,
+  ClientProfile,
+  ClientProfileIndexEntry,
+  DiscoveryResult,
+  GeoSuggestionItem,
+  SearchPayload,
+  SearchResponse,
+  Structure,
+  StructureIndexEntry,
+} from "./types";
 
 const DEFAULT_API_BASE_URL = process.env.NODE_ENV === "production" ? "" : "http://localhost:8011";
 
@@ -146,6 +157,44 @@ export async function generateMultiStudy(payload: MultiStudyPayload): Promise<Mu
   return (await response.json()) as MultiStudyResult;
 }
 
+// ── Agente de Análise (classificação de keywords) ──────────────────────────
+
+export type EvaluateTier = "oportunidade_excelente" | "otimo" | "talvez" | "negativar";
+
+export interface EvaluatedTab {
+  name: string;
+  seeds: string[];
+  items: Record<string, unknown>[];
+}
+
+export interface EvaluateResponse {
+  tabs: EvaluatedTab[];
+  resumo: Record<EvaluateTier, number>;
+  labels: Record<EvaluateTier, string>;
+}
+
+export async function evaluateKeywords(params: {
+  tabs: { name: string; seeds: string[]; items: Record<string, unknown>[] }[];
+  seeds: string[];
+  niche: string;
+}): Promise<EvaluateResponse> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/google/evaluate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+  } catch {
+    throw new Error("Nao foi possivel conectar ao avaliador de palavras-chave.");
+  }
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: "Erro ao avaliar palavras-chave." }));
+    throw new Error(err?.detail ?? "Erro ao avaliar palavras-chave.");
+  }
+  return (await response.json()) as EvaluateResponse;
+}
+
 export interface PlanBriefPayload {
   cliente: string;
   especialidade: string;
@@ -196,6 +245,21 @@ export async function downloadMultiStudyXlsx(study: MultiStudyResult): Promise<B
     body: JSON.stringify(study),
   });
   if (!response.ok) throw new Error("Erro ao gerar XLSX.");
+  return response.blob();
+}
+
+export async function downloadClassifiedXlsx(study: {
+  tabs: { name: string; items: Record<string, unknown>[] }[];
+}): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}/api/google/study/export-classified`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(study),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: "Erro ao gerar XLSX classificado." }));
+    throw new Error(err?.detail ?? "Erro ao gerar XLSX classificado.");
+  }
   return response.blob();
 }
 
@@ -268,6 +332,115 @@ export async function getStudy(id: string): Promise<StoredStudy | null> {
 
 export async function deleteStudy(id: string): Promise<void> {
   await fetch(`/api/studies/${id}`, { method: "DELETE" });
+}
+
+// ── Perfis de Cliente ───────────────────────────────────────────────────────
+
+export async function listClients(): Promise<ClientProfileIndexEntry[]> {
+  const res = await fetch("/api/clients");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Erro ao carregar clientes." }));
+    throw new Error((err as { error?: string }).error ?? "Erro ao carregar clientes.");
+  }
+  return (await res.json()) as ClientProfileIndexEntry[];
+}
+
+export async function getClient(id: string): Promise<ClientProfile | null> {
+  const res = await fetch(`/api/clients/${id}`);
+  if (!res.ok) return null;
+  return (await res.json()) as ClientProfile;
+}
+
+export async function saveClient(
+  profile: Partial<ClientProfile>
+): Promise<{ ok: boolean; id: string }> {
+  const isUpdate = Boolean(profile.id);
+  const res = await fetch(isUpdate ? `/api/clients/${profile.id}` : "/api/clients", {
+    method: isUpdate ? "PUT" : "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(profile),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Erro ao salvar cliente." }));
+    throw new Error((err as { error?: string }).error ?? "Erro ao salvar cliente.");
+  }
+  return (await res.json()) as { ok: boolean; id: string };
+}
+
+export async function deleteClient(id: string): Promise<void> {
+  await fetch(`/api/clients/${id}`, { method: "DELETE" });
+}
+
+// ── Criador de Estrutura + Estruturas ────────────────────────────────────────
+
+export async function buildCampaign(params: {
+  tabs: { name: string; items: Record<string, unknown>[] }[];
+  clientProfileId?: string;
+  clientProfile?: ClientProfile;
+}): Promise<Structure> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/google/build-campaign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...params, objetivo: "search" }),
+    });
+  } catch {
+    throw new Error("Nao foi possivel conectar ao criador de estrutura.");
+  }
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: "Erro ao montar estrutura." }));
+    throw new Error(err?.detail ?? "Erro ao montar estrutura.");
+  }
+  return (await response.json()) as Structure;
+}
+
+export async function listStructures(): Promise<StructureIndexEntry[]> {
+  const res = await fetch("/api/structures");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Erro ao carregar estruturas." }));
+    throw new Error((err as { error?: string }).error ?? "Erro ao carregar estruturas.");
+  }
+  return (await res.json()) as StructureIndexEntry[];
+}
+
+export async function getStructure(id: string): Promise<Structure | null> {
+  const res = await fetch(`/api/structures/${id}`);
+  if (!res.ok) return null;
+  return (await res.json()) as Structure;
+}
+
+export async function saveStructure(structure: Structure): Promise<{ ok: boolean; id: string }> {
+  const res = await fetch("/api/structures", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(structure),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Erro ao salvar estrutura." }));
+    throw new Error((err as { error?: string }).error ?? "Erro ao salvar estrutura.");
+  }
+  return (await res.json()) as { ok: boolean; id: string };
+}
+
+export async function updateStructure(
+  id: string,
+  patch: Partial<Structure>
+): Promise<{ ok: boolean; id: string }> {
+  const res = await fetch(`/api/structures/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Erro ao atualizar estrutura." }));
+    throw new Error((err as { error?: string }).error ?? "Erro ao atualizar estrutura.");
+  }
+  return (await res.json()) as { ok: boolean; id: string };
+}
+
+export async function deleteStructure(id: string): Promise<void> {
+  await fetch(`/api/structures/${id}`, { method: "DELETE" });
 }
 
 export async function exportMultiStudyToSheets(study: MultiStudyResult): Promise<{ url: string }> {

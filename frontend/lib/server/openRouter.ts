@@ -47,6 +47,94 @@ async function chat(readEnv: ReadEnv, messages: ChatMessage[], temperature = 0.2
   return content;
 }
 
+export type ChatMsg = ChatMessage;
+
+// Wrapper exportado para chamadas JSON genéricas (ex.: builder de campanha).
+export async function chatJson(
+  readEnv: ReadEnv,
+  messages: ChatMessage[],
+  temperature = 0.3
+): Promise<string> {
+  return chat(readEnv, messages, temperature);
+}
+
+export async function classifyKeywordIntent(
+  readEnv: ReadEnv,
+  keywordNames: string[],
+  seedKeywords: string[],
+  niche: string
+): Promise<Record<string, boolean>> {
+  // Retorna { keyword: true } quando a palavra DEVE ser negativada (sem intenção
+  // comercial ligada ao nicho). Ausência da chave = manter (não negativar).
+  if (!keywordNames.length) {
+    return {};
+  }
+
+  const config = readOpenRouterConfig(readEnv);
+  if (!config.apiKey) {
+    // Sem chave: não derruba a avaliação — apenas pula o gate.
+    return {};
+  }
+
+  const seedStr = seedKeywords.slice(0, 10).join(", ");
+  const result: Record<string, boolean> = {};
+  const CHUNK = 60;
+
+  for (let start = 0; start < keywordNames.length; start += CHUNK) {
+    const chunk = keywordNames.slice(start, start + CHUNK);
+    const idToName = new Map<number, string>();
+    chunk.forEach((name, i) => idToName.set(start + i, name));
+    const kwList = [...idToName.entries()].map(([id, kw]) => `${id}|${kw}`).join("\n");
+
+    let raw: string;
+    try {
+      raw = await chat(
+        readEnv,
+        [
+          {
+            role: "system",
+            content:
+              "Você é especialista em Google Ads. Sua tarefa é identificar palavras-chave SEM " +
+              "intenção comercial ligada ao nicho do anunciante (devem ser negativadas). " +
+              "Negative quando a palavra for: informacional pura (o que é, sintomas, significado), " +
+              "produto/serviço errado, fora do tema do nicho, busca por emprego/curso/salário, " +
+              "gratuito/SUS/convênio quando não é o foco, ou marca de terceiros irrelevante. " +
+              "NÃO negative termos com intenção comercial no nicho, mesmo que sejam de marca/" +
+              "concorrente relevante ao nicho. Na dúvida, NÃO negative. " +
+              "Cada item vem como `ID|texto`. Responda APENAS com JSON: " +
+              '{"negativar": [id1, id2, ...]} contendo só os IDs a negativar.',
+          },
+          {
+            role: "user",
+            content:
+              `Nicho do anunciante: ${niche || seedStr || "(não informado)"}\n` +
+              `Tema central (seeds): ${seedStr || "(não informado)"}\n\n` +
+              `Avalie as ${chunk.length} palavras (formato \`ID|texto\`):\n\n${kwList}`,
+          },
+        ],
+        0.0
+      );
+    } catch {
+      // Falha no lote: não negativa nada por intenção nesse lote.
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as { negativar?: unknown };
+      const ids = Array.isArray(parsed.negativar) ? parsed.negativar : [];
+      for (const rawId of ids) {
+        const id = typeof rawId === "number" ? rawId : Number.parseInt(String(rawId), 10);
+        const name = idToName.get(id);
+        if (name) result[name] = true;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return result;
+}
+
 export async function categorizeKeywords(
   readEnv: ReadEnv,
   keywordNames: string[],
