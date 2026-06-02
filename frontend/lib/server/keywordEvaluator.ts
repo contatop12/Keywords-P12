@@ -1,4 +1,7 @@
 import { classifyKeywordIntent } from "./openRouter";
+import type { Classificacao, FiltroResultado } from "../types";
+
+export type { Classificacao } from "../types";
 
 type ReadEnv = (key: string) => string | undefined;
 
@@ -11,14 +14,6 @@ export const TIER_LABELS: Record<Tier, string> = {
   negativar: "Negativar",
 };
 
-export type Classificacao = {
-  tier: Tier;
-  rotulo: string;
-  motivo: string;
-  score_value: number;
-  score_eficiencia: number;
-};
-
 type Item = Record<string, unknown>;
 
 export type Resumo = Record<Tier, number>;
@@ -28,6 +23,25 @@ type Knobs = {
   intentFilter: boolean;
   scope: "per_tab" | "global";
   minVolume: number;
+  // pesos dos filtros
+  wVolForte: number;
+  wVolBase: number;
+  wCresc3m: number;
+  wCrescAno: number;
+  wConcBaixa: number;
+  wCpc: number;
+  wLeilao: number;
+  // limiares dos filtros
+  tVolForte: number;
+  tVolBase: number;
+  tCresc3m: number;
+  tConcBaixa: number;
+  tLeilaoSpread: number;
+  // cortes de tier
+  tierExcelente: number;
+  tierOtimo: number;
+  tierTalvez: number;
+  // DEPRECADOS (mantidos só para leitura — não usados na nova lógica)
   pExcelente: number;
   pOtimo: number;
   compBaixaMax: number;
@@ -52,6 +66,21 @@ export function readKnobs(readEnv: ReadEnv): Knobs {
     intentFilter: bool(readEnv("EVALUATOR_INTENT_FILTER_ENABLED"), true),
     scope: scopeRaw === "global" ? "global" : "per_tab",
     minVolume: num(readEnv("EVALUATOR_MIN_VOLUME"), 30),
+    wVolForte: num(readEnv("EVALUATOR_W_VOL_FORTE"), 3),
+    wVolBase: num(readEnv("EVALUATOR_W_VOL_BASE"), 1),
+    wCresc3m: num(readEnv("EVALUATOR_W_CRESC_3M"), 3),
+    wCrescAno: num(readEnv("EVALUATOR_W_CRESC_ANO"), 1),
+    wConcBaixa: num(readEnv("EVALUATOR_W_CONC_BAIXA"), 2),
+    wCpc: num(readEnv("EVALUATOR_W_CPC"), 1),
+    wLeilao: num(readEnv("EVALUATOR_W_LEILAO"), 1),
+    tVolForte: num(readEnv("EVALUATOR_T_VOL_FORTE"), 2500),
+    tVolBase: num(readEnv("EVALUATOR_T_VOL_BASE"), 500),
+    tCresc3m: num(readEnv("EVALUATOR_T_CRESC_3M"), 10),
+    tConcBaixa: num(readEnv("EVALUATOR_T_CONC_BAIXA"), 33),
+    tLeilaoSpread: num(readEnv("EVALUATOR_T_LEILAO_SPREAD"), 0.5),
+    tierExcelente: num(readEnv("EVALUATOR_TIER_EXCELENTE"), 0.7),
+    tierOtimo: num(readEnv("EVALUATOR_TIER_OTIMO"), 0.45),
+    tierTalvez: num(readEnv("EVALUATOR_TIER_TALVEZ"), 0.2),
     pExcelente: num(readEnv("EVALUATOR_P_EXCELENTE"), 0.6),
     pOtimo: num(readEnv("EVALUATOR_P_OTIMO"), 0.55),
     compBaixaMax: num(readEnv("EVALUATOR_COMP_BAIXA_MAX"), 33),
@@ -131,6 +160,66 @@ function emptyResumo(): Resumo {
   return { oportunidade_excelente: 0, otimo: 0, talvez: 0, negativar: 0 };
 }
 
+export function tierForScore(score: number, knobs: Knobs): Tier {
+  if (score >= knobs.tierExcelente) return "oportunidade_excelente";
+  if (score >= knobs.tierOtimo) return "otimo";
+  if (score >= knobs.tierTalvez) return "talvez";
+  return "negativar";
+}
+
+export type ScopeCtx = { cpcMedian: number | null };
+
+// Soma ponderada de 7 filtros. Filtro sem dado é excluído do denominador
+// (não pune a palavra), então score = pesoObtido / pesoDisponível.
+export function scoreItem(
+  item: Item,
+  ctx: ScopeCtx,
+  knobs: Knobs
+): { filtros: FiltroResultado[]; score_total: number } {
+  const volume = volumeOf(item);
+  const c3m = parsePercent(item.mudanca_tres_meses);
+  const cAno = parsePercent(item.mudanca_ano_anterior);
+  const grade = gradeOf(item);
+  const cpc = cpcOf(item); // maior_lance_topo
+  const menor = toNumber(item.menor_lance_topo);
+
+  const filtros: FiltroResultado[] = [];
+  let pesoObtido = 0;
+  let pesoDisponivel = 0;
+
+  const add = (nome: string, peso: number, temDado: boolean, ok: boolean) => {
+    const passou = temDado && ok;
+    filtros.push({ nome, peso, ok: passou });
+    if (!temDado) return;
+    pesoDisponivel += peso;
+    if (passou) pesoObtido += peso;
+  };
+
+  add("Volume forte", knobs.wVolForte, true, volume >= knobs.tVolForte);
+  add("Volume base", knobs.wVolBase, true, volume >= knobs.tVolBase);
+  add("Crescimento 3 meses", knobs.wCresc3m, c3m != null, (c3m ?? 0) >= knobs.tCresc3m);
+  add("Não declina (ano)", knobs.wCrescAno, cAno != null, (cAno ?? 0) >= 0);
+  add("Concorrência baixa", knobs.wConcBaixa, grade != null, (grade ?? 100) <= knobs.tConcBaixa);
+
+  const cpcTemDado = cpc != null && ctx.cpcMedian != null;
+  add("CPC eficiente", knobs.wCpc, cpcTemDado, cpcTemDado && cpc! <= ctx.cpcMedian!);
+
+  const spreadTemDado = cpc != null && menor != null && cpc > 0;
+  const spread = spreadTemDado ? (cpc! - menor!) / cpc! : null;
+  add("Leilão estável", knobs.wLeilao, spreadTemDado, spread != null && spread <= knobs.tLeilaoSpread);
+
+  const score_total = pesoDisponivel > 0 ? round2(pesoObtido / pesoDisponivel) : 0;
+  return { filtros, score_total };
+}
+
+export function buildMotivo(score: number, filtros: FiltroResultado[], volume: number): string {
+  const aprovados = filtros.filter((f) => f.ok).map((f) => f.nome.toLowerCase());
+  if (!aprovados.length) {
+    return `Score ${score.toFixed(2)} — nenhum sinal forte (${Math.round(volume)} buscas/mês).`;
+  }
+  return `Score ${score.toFixed(2)} — ${aprovados.join(", ")}.`;
+}
+
 function classifyScope(
   items: Item[],
   knobs: Knobs,
@@ -141,6 +230,7 @@ function classifyScope(
   const volPct = percentileMap(volumes);
   const cpcPct = cpcs.length ? percentileMap(cpcs) : null;
   const cpcMedian = median(cpcs);
+  const ctx: ScopeCtx = { cpcMedian };
 
   return items.map((item) => {
     const name = String(item.name ?? "").trim();
@@ -149,12 +239,14 @@ function classifyScope(
     const cpc = cpcOf(item);
     const trend = trendOf(item);
 
+    // Scores antigos mantidos para xlsx/tabela.
     const scoreValue = round2(clamp01(volPct(volume)));
-
     const compComponent = grade != null ? 1 - clamp01(grade / 100) : 0.4;
     const cpcComponent = cpc != null && cpcPct ? 1 - clamp01(cpcPct(cpc)) : 0.5;
     const trendComponent = trend == null ? 0.5 : trend > 5 ? 1 : trend < -5 ? 0.2 : 0.5;
     const scoreEficiencia = round2(clamp01((compComponent + cpcComponent + trendComponent) / 3));
+
+    const { filtros, score_total } = scoreItem(item, ctx, knobs);
 
     if (knobs.intentFilter && name && negativeNames.has(name)) {
       return {
@@ -165,38 +257,14 @@ function classifyScope(
           motivo: "Sem intenção comercial ligada ao nicho (gate de intenção).",
           score_value: scoreValue,
           score_eficiencia: scoreEficiencia,
+          score_total,
+          filtros,
         },
       };
     }
 
-    const compBaixa = grade != null && grade <= knobs.compBaixaMax;
-    const compAlta = grade != null && grade >= knobs.compAltaMin;
-    const cpcBaixo = cpc != null && cpcMedian != null && cpc <= cpcMedian;
-    const trendUp = trend != null && trend > 5;
-    const temAlcance = volume >= knobs.minVolume;
-
-    let tier: Tier;
-    let motivo: string;
-
-    if (temAlcance && (compBaixa || cpcBaixo || trendUp) && scoreEficiencia >= knobs.pExcelente) {
-      tier = "oportunidade_excelente";
-      const fatores: string[] = [];
-      if (compBaixa) fatores.push("concorrência baixa");
-      if (cpcBaixo) fatores.push("CPC baixo");
-      if (trendUp) fatores.push("tendência em alta");
-      motivo = `Relevante, com alcance (${Math.round(volume)} buscas/mês) e ${fatores.join(", ")}.`;
-    } else if (scoreValue >= knobs.pOtimo || (temAlcance && !compAlta)) {
-      tier = "otimo";
-      motivo =
-        scoreValue >= knobs.pOtimo
-          ? `Núcleo sólido por volume (${Math.round(volume)} buscas/mês).`
-          : `Volume relevante (${Math.round(volume)} buscas/mês) sem concorrência alta.`;
-    } else {
-      tier = "talvez";
-      motivo = temAlcance
-        ? "Relevante porém cara/disputada sem destaque de eficiência."
-        : `Sinal fraco / baixo volume (${Math.round(volume)} buscas/mês).`;
-    }
+    const tier = tierForScore(score_total, knobs);
+    const motivo = buildMotivo(score_total, filtros, volume);
 
     return {
       item,
@@ -206,6 +274,8 @@ function classifyScope(
         motivo,
         score_value: scoreValue,
         score_eficiencia: scoreEficiencia,
+        score_total,
+        filtros,
       },
     };
   });

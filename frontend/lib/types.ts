@@ -16,12 +16,16 @@ export type InterestItem = {
 
 export type Tier = "oportunidade_excelente" | "otimo" | "talvez" | "negativar";
 
+export type FiltroResultado = { nome: string; peso: number; ok: boolean };
+
 export type Classificacao = {
   tier: Tier;
   rotulo: string;
   motivo: string;
   score_value: number;
   score_eficiencia: number;
+  score_total: number;
+  filtros: FiltroResultado[];
 };
 
 export const TIER_LABELS: Record<Tier, string> = {
