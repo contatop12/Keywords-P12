@@ -10,8 +10,9 @@
     "backend:dev": ".\\.venv\\Scripts\\python -m uvicorn backend.main:app --reload --port 8011",
     "frontend:install": "npm --prefix frontend clean-install --progress=false",
     "frontend:dev": "npm --prefix frontend run dev -- --port 3000",
-    "frontend:build": "npm run frontend:install && npm --prefix frontend run cf:build",
-    "frontend:start": "npm --prefix frontend run start"
+    "frontend:build": "npm run cloudflare:config:check && npm run frontend:install && npm --prefix frontend run cf:build",
+    "frontend:start": "npm --prefix frontend run start",
+    "cloudflare:config:check": "node scripts/validate-cloudflare-config.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
